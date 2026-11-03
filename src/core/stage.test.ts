@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BOSS_WIDTH,
   ENEMY_SIZE,
   GROUND_Y,
   MAX_PIT_WIDTH,
@@ -70,7 +69,7 @@ describe('平地の区間', () => {
   it('10 か所のボスの闘技場(往復範囲とその前後 100)には、穴・崖・浮島がない', () => {
     expect(STAGE.bosses).toHaveLength(10);
     for (const b of STAGE.bosses) {
-      expect(hasFeatureIn(STAGE, b.left - 100, b.right + BOSS_WIDTH + 100)).toBe(false);
+      expect(hasFeatureIn(STAGE, b.left - 100, b.right + b.def.w + 100)).toBe(false);
     }
   });
 
@@ -242,7 +241,7 @@ describe('敵とボスの配置', () => {
     expect(STAGE.bosses).toHaveLength(10);
     for (let i = 1; i < STAGE.bosses.length; i++) {
       const prev = STAGE.bosses[i - 1]!;
-      expect(STAGE.bosses[i]!.left).toBeGreaterThan(prev.right + BOSS_WIDTH);
+      expect(STAGE.bosses[i]!.left).toBeGreaterThan(prev.right + prev.def.w);
     }
     expect(STAGE.bosses.map((b) => b.def.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
@@ -267,14 +266,14 @@ describe('敵とボスの配置', () => {
     }
     for (const b of STAGE.bosses) {
       expect(b.left).toBeGreaterThanOrEqual(600);
-      expect(b.right + BOSS_WIDTH).toBeLessThanOrEqual(SEA_X - 600);
+      expect(b.right + b.def.w).toBeLessThanOrEqual(SEA_X - 600);
     }
   });
 
   it('ザコ敵は、ボスの往復範囲(前後 100 を含む)と重ならない', () => {
     for (const e of STAGE.enemies) {
       for (const b of STAGE.bosses) {
-        const overlap = e.left < b.right + BOSS_WIDTH + 100 && b.left - 100 < e.right + ENEMY_SIZE;
+        const overlap = e.left < b.right + b.def.w + 100 && b.left - 100 < e.right + ENEMY_SIZE;
         expect(overlap).toBe(false);
       }
     }
@@ -325,8 +324,41 @@ describe('validatePlacements(配置の検査の確認)', () => {
 
   it('ボスの前後が平地でない(崖がかかる)と違反になる', () => {
     const b = STAGE.bosses[1]!;
-    const wall = { x: b.right + BOSS_WIDTH + 40, y: GROUND_Y - 100, w: 100, h: 100 };
+    const wall = { x: b.right + b.def.w + 40, y: GROUND_Y - 100, w: 100, h: 100 };
     const bad = { ...STAGE, cliffs: [...STAGE.cliffs, wall] };
     expect(validatePlacements(bad).some((e) => e.includes('前後'))).toBe(true);
+  });
+});
+
+describe('最終ボス「ヌシ」の闘技場', () => {
+  const nushi = STAGE.bosses[9]!;
+
+  it('10 番目(最も右側)の闘技場にいて、往復範囲の幅は 600、大きさは 200×250', () => {
+    expect(nushi.def.name).toBe('ヌシ');
+    expect(nushi.right - nushi.left).toBe(600);
+    expect([nushi.def.w, nushi.def.h]).toEqual([200, 250]);
+    for (const b of STAGE.bosses.slice(0, 9)) expect(b.right).toBeLessThan(nushi.left);
+  });
+
+  it('大きさ(200)と前後 100 を含む範囲が、穴・崖・浮島のない平らな地面', () => {
+    expect(hasFeatureIn(STAGE, nushi.left - 100, nushi.right + nushi.def.w + 100)).toBe(false);
+  });
+
+  it('大きさを含む範囲が、海の手前の安全な区間(海の手前 600)に入らない', () => {
+    expect(nushi.right + nushi.def.w).toBeLessThanOrEqual(SEA_X - 600);
+  });
+
+  it('ヌシの範囲(大きさと前後 100 を含む)に、ザコ敵は配置されていない', () => {
+    for (const e of STAGE.enemies) {
+      const overlap = e.left < nushi.right + nushi.def.w + 100 && nushi.left - 100 < e.right + ENEMY_SIZE;
+      expect(overlap).toBe(false);
+    }
+  });
+
+  it('大きさを無視した検査(幅 80 として扱う)なら通るが、実際の幅 200 で検査すると、近すぎる配置を検出する', () => {
+    // ヌシの右端から幅 80 + 100 の位置にザコ敵を置く(通常ボスの幅なら重ならないが、ヌシの幅 200 では重なる)
+    const bad = { ...STAGE.enemies[0]!, left: nushi.right + 80 + 100 + 20, right: nushi.right + 80 + 100 + 60, x: nushi.right + 80 + 100 + 20 };
+    const errors = validatePlacements({ ...STAGE, enemies: [bad, ...STAGE.enemies.slice(1)] });
+    expect(errors.some((e) => e.includes('ボス 9'))).toBe(true);
   });
 });

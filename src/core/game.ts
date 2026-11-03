@@ -1,11 +1,10 @@
-import { bossRect, createBoss, damageBoss, stepBoss, type Boss } from './boss';
+import { bossRect, createBoss, damageBoss, type Boss } from './boss';
+import { bossFlags, stepBossScript } from './boss-scripts';
 import { overlapAmount, overlaps } from './collision';
 import { isStomp, playerRect } from './contact';
 import { createEnemy, stepEnemy, type Enemy } from './enemy';
 import { resolveEnemyContact } from './enemy-contact';
 import {
-  BOSS_HEIGHT,
-  BOSS_WIDTH,
   FIXED_DT,
   PART_HEIGHT,
   PART_WIDTH,
@@ -27,6 +26,7 @@ import {
   type Player,
   type WorldBounds,
 } from './player';
+import { resolveProjectileContact, stepProjectile, type Projectile } from './projectile';
 import { createPart, partRect, stepPart, type RaftPart } from './raft-part';
 import { STAGE, type Stage } from './stage';
 import { fallYOf, isFullySupported, platformsOf, solidsOf } from './terrain';
@@ -37,6 +37,8 @@ export interface GameState {
   bosses: Boss[];
   /** ザコ敵(倒された敵も `alive: false` で残る)。 */
   enemies: Enemy[];
+  /** ボスが出した弾・衝撃波。 */
+  projectiles: Projectile[];
   parts: RaftPart[];
   /** 拾得したイカダの部品の数。 */
   partsCollected: number;
@@ -73,6 +75,7 @@ export function createGame(
     enemies: placements.enemies.map((e, i) =>
       createEnemy(e.kind, e.x, e.left, e.right, world.groundY, i),
     ),
+    projectiles: [],
     parts: [],
     partsCollected: 0,
     raftComplete: false,
@@ -87,9 +90,11 @@ export function createGame(
 
 /**
  * プレイヤーとボスの衝突解決。
- * 落下中かつ更新前の下辺がボス上辺付近なら踏みつけ(ボスにダメージ + 跳ね返り。プレイヤーは被弾しない)、
- * それ以外の重なりは水平方向へ押し戻し、プレイヤーが無敵でなければ被弾(hit)として小さく跳ね上げる。
- * 無敵中は押し戻しだけ行い、ボスはすり抜けられない。
+ * - もぐっているボス(hidden)とは、接触しない(踏みつけも押し戻しも被弾もない)。
+ * - 落下中かつ更新前の下辺がボス上辺付近なら踏みつけ(プレイヤーは跳ね返り、被弾しない)。ボスにダメージを与えるが、
+ *   変身中(harmless)のボスにはダメージを与えない。転がっているボス(stompImmune)は踏みつけにならず、通常の接触になる。
+ * - それ以外の重なりは水平方向のボスの端まで押し戻し、プレイヤーが無敵でなければ被弾(hit)として小さく跳ね上げる。
+ *   無敵中は押し戻しだけ行い、ボスはすり抜けられない。変身中(harmless)は、押し戻しも被弾もない。
  */
 function resolveBossContact(
   prevPlayer: Player,
@@ -99,25 +104,30 @@ function resolveBossContact(
   invulnerable: boolean,
 ): { player: Player; boss: Boss; hit: boolean } {
   if (!boss.alive) return { player, boss, hit: false };
-  const amount = overlapAmount(playerRect(player), bossRect(boss));
+  const flags = bossFlags(boss);
+  if (flags.hidden) return { player, boss, hit: false };
+  const rect = bossRect(boss);
+  const amount = overlapAmount(playerRect(player), rect);
   if (!amount) return { player, boss, hit: false };
 
-  if (isStomp(prevPlayer.y, player.vy, boss.y)) {
+  if (!flags.stompImmune && isStomp(prevPlayer.y, player.vy, rect.y)) {
     return {
       player: {
         ...player,
-        y: boss.y - PLAYER_HEIGHT,
+        y: rect.y - PLAYER_HEIGHT,
         vy: -STOMP_BOUNCE_SPEED,
         onGround: false,
       },
-      boss: damageBoss(boss),
+      boss: flags.harmless ? boss : damageBoss(boss),
       hit: false,
     };
   }
+  if (flags.harmless) return { player, boss, hit: false };
 
   const playerCenter = player.x + PLAYER_WIDTH / 2;
-  const bossCenter = boss.x + BOSS_WIDTH / 2;
-  const pushed = playerCenter < bossCenter ? player.x - amount.x : player.x + amount.x;
+  const bossCenter = boss.x + boss.w / 2;
+  // ボスの端まで押し出す(深く重なっていても、ボスの中に残らない)
+  const pushed = playerCenter < bossCenter ? boss.x - PLAYER_WIDTH : boss.x + boss.w;
   const x = Math.min(Math.max(pushed, 0), world.width - PLAYER_WIDTH);
   const pushedPlayer = { ...player, x };
   if (invulnerable) return { player: pushedPlayer, boss, hit: false };
@@ -130,7 +140,7 @@ function resolveBossContact(
 
 /**
  * 1 回の固定ステップ分、ゲーム全体を更新する。
- * 順序: プレイヤー → ボス・ザコ敵 → 衝突解決(ボス → ザコ敵。被弾・無敵) → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
+ * 順序: プレイヤー → ボス(弾を出す)・ザコ敵・弾 → 衝突解決(ボス → ザコ敵 → 弾。被弾・無敵) → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
  */
 export function stepGame(
   state: GameState,
@@ -165,10 +175,22 @@ export function stepGame(
     respawn = { x: movedPlayer.x, y: movedPlayer.y };
   }
 
-  // ボス(各体の往復・無敵時間)とザコ敵(各体の行動。プレイヤーの位置に反応する敵がいる)
-  const movedBosses = state.bosses.map((b) => stepBoss(b, dt));
-  const ctx = { playerX: movedPlayer.x + PLAYER_WIDTH / 2, playerY: movedPlayer.y, groundY: world.groundY };
+  // ボス(行動の流れ。弾を出す)とザコ敵(各体の行動。プレイヤーの位置に反応する敵がいる)
+  const playerCenterX = movedPlayer.x + PLAYER_WIDTH / 2;
+  const spawned: Projectile[] = [];
+  const movedBosses = state.bosses.map((b) => {
+    const r = stepBossScript(b, { playerX: playerCenterX, groundY: world.groundY }, dt);
+    spawned.push(...r.spawns);
+    return r.boss;
+  });
+  const ctx = { playerX: playerCenterX, playerY: movedPlayer.y, groundY: world.groundY };
   const movedEnemies = state.enemies.map((e) => stepEnemy(e, ctx, dt));
+  // 既存の弾を動かし(消えたものは取り除く)、この更新で出た弾を加える(出た更新では動かさない)
+  const projWorld = { width: world.width, groundY: world.groundY };
+  const flying = state.projectiles
+    .map((p) => stepProjectile(p, projWorld, dt))
+    .filter((p) => p.alive);
+  const movedProjectiles = [...flying, ...spawned];
 
   // 無敵時間は更新の冒頭で減らす(被弾した更新では PLAYER_INVULN_TIME のまま、次の更新から減る)
   const invulnLeft = fell ? PLAYER_INVULN_TIME : Math.max(0, state.hitInvuln - dt);
@@ -186,7 +208,10 @@ export function stepGame(
   const enemyResult = resolveEnemyContact(prevPlayer, player, movedEnemies, invulnerable);
   player = enemyResult.player;
   const enemies = enemyResult.enemies;
-  const hit = bossHit || enemyResult.hit;
+  const projResult = resolveProjectileContact(player, movedProjectiles, invulnerable);
+  player = projResult.player;
+  const projectiles = projResult.projectiles.filter((p) => p.alive);
+  const hit = bossHit || enemyResult.hit || projResult.hit;
 
   const hp = Math.max(0, state.hp - (fell ? 1 : 0) - (hit ? 1 : 0));
   const hitInvuln = hit ? PLAYER_INVULN_TIME : invulnLeft;
@@ -195,12 +220,10 @@ export function stepGame(
   let parts = state.parts;
   bosses.forEach((boss, i) => {
     if (state.bosses[i]!.alive && !boss.alive) {
+      const r = bossRect(state.bosses[i]!);
       parts = [
         ...parts,
-        createPart(
-          boss.x + BOSS_WIDTH / 2 - PART_WIDTH / 2,
-          boss.y + BOSS_HEIGHT / 2 - PART_HEIGHT / 2,
-        ),
+        createPart(r.x + r.w / 2 - PART_WIDTH / 2, r.y + r.h / 2 - PART_HEIGHT / 2),
       ];
     }
   });
@@ -228,6 +251,7 @@ export function stepGame(
     player: finalPlayer,
     bosses,
     enemies,
+    projectiles,
     parts: remaining,
     partsCollected,
     raftComplete,

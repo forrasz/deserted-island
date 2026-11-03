@@ -176,7 +176,7 @@ describe('ボスごとのドロップと部品 10 個', () => {
   });
 
   it('10 体すべてを倒すと、部品が合計 10 個ドロップされる', () => {
-    const bosses = BOSS_DEFS.map((def, k) => stillBoss(1000 + k * 600, def, { hp: 1 }));
+    const bosses = BOSS_DEFS.map((def, k) => stillBoss(1000 + k * 600, def, { hp: 1, transformed: true }));
     let g = world([], bosses);
     for (let k = 0; k < 10; k++) {
       const b = g.bosses[k]!;

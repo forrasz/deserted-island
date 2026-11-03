@@ -133,3 +133,19 @@ export const CHARGER_WALK_SPEED = 40;
 export const CHARGER_WALK_TIME = 2;
 export const CHARGER_DASH_SPEED = 320;
 export const CHARGER_DASH_TIME = 0.5;
+
+// --- ボスの攻撃(弾・衝撃波) ---
+/** 直進弾・放物線の弾の大きさ(一辺、px)。 */
+export const PROJECTILE_SIZE = 24;
+/** 衝撃波の大きさ(幅・高さ、px)。地面の上に立つ。 */
+export const WAVE_WIDTH = 32;
+export const WAVE_HEIGHT = 24;
+/** 寿命(秒)。放物線の弾は地面に達したら消えるが、念のための上限も持つ。 */
+export const SHOT_LIFE = 3;
+export const ARC_LIFE = 5;
+export const WAVE_LIFE = 2;
+
+// --- ボスの行動(specs/boss-behaviors、final-boss に対応) ---
+/** 最終ボスの変身の時間(秒)と、強化形態で時間を縮める倍率。 */
+export const BOSS_TRANSFORM_TIME = 1.5;
+export const BOSS_RAGE_TIME_SCALE = 0.6;

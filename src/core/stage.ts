@@ -247,9 +247,9 @@ function buildStage(): Stage {
     ['hider', 21470, 21640],
     ['charger', 22480, 22640],
     ['bouncer', 23500, 23650],
-    // ボス 10 のあと〜砂浜の安全な区間の手前
-    ['floater', 24520, 24650],
-    ['swooper', 24700, 24900],
+    // ヌシ(大きさ 200)のあと〜砂浜の安全な区間の手前
+    ['floater', 24730, 24790],
+    ['swooper', 24840, 24900],
   ];
   const enemies: EnemyPlacement[] = enemySpec.map(([kind, left, right]) => ({
     kind,

@@ -1,8 +1,6 @@
 import { worldToScreen, worldToScreenY } from '../core/camera';
 import type { Rect } from '../core/collision';
 import {
-  BOSS_HEIGHT,
-  BOSS_WIDTH,
   ENEMY_SIZE,
   PARALLAX_FACTOR,
   PLAYER_MAX_HP,
@@ -21,9 +19,12 @@ import {
   WORLD_HEIGHT,
 } from '../core/config';
 import { blinkVisible } from '../core/blink';
+import { bossRect, type Boss } from '../core/boss';
+import { bossFlags } from '../core/boss-scripts';
 import type { Enemy } from '../core/enemy';
 import { ENEMY_DEFS } from '../core/enemy-defs';
 import { nextFacing, type Facing } from '../core/facing';
+import type { Projectile } from '../core/projectile';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
 import { STAGE } from '../core/stage';
@@ -60,7 +61,7 @@ export class Renderer {
   draw(flow: Flow, cameraX: number, cameraY: number = WORLD_HEIGHT - VIEW_HEIGHT): void {
     const { ctx } = this;
     this.cameraY = cameraY;
-    const { player, bosses, enemies, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
+    const { player, bosses, enemies, projectiles, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
 
     // 背景(素材があれば視差つきで横に繰り返す。なければ空色)
     this.drawBackground(cameraX);
@@ -79,26 +80,18 @@ export class Renderer {
     // ザコ敵(種類ごとの色と目印の図形。倒された敵・隠れている敵・画面外の敵は描かない)
     for (const e of enemies) this.drawEnemy(e, cameraX);
 
-    // ボス「カクレモモジリ」10 体(素材があれば画像、なければ緑の四角形。頭上に残り体力バー)
+    // ボス 10 体(素材があれば画像、なければ種類ごとの色の図形。頭上に残り体力バー)
     for (const boss of bosses) {
       if (!boss.alive) continue;
       const bx = worldToScreen(boss.x, cameraX);
-      if (bx + BOSS_WIDTH < 0 || bx > VIEW_WIDTH) continue;
+      if (bx + boss.w < 0 || bx > VIEW_WIDTH) continue;
       const facing = nextFacing(this.bossFacings.get(boss.id) ?? 1, boss.vx);
       this.bossFacings.set(boss.id, facing);
-      const bossImg = this.assets.get('boss');
-      if (bossImg) {
-        this.drawSprite(bossImg, { x: bx, y: this.sy(boss.y), w: BOSS_WIDTH, h: BOSS_HEIGHT }, facing);
-      } else {
-        ctx.fillStyle = '#2e8b57';
-        ctx.fillRect(bx, this.sy(boss.y), BOSS_WIDTH, BOSS_HEIGHT);
-      }
-      const seg = BOSS_WIDTH / boss.maxHp;
-      for (let i = 0; i < boss.maxHp; i++) {
-        ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
-        ctx.fillRect(bx + i * seg + 1, this.sy(boss.y) - 12, seg - 2, 8);
-      }
+      this.drawBoss(boss, bx, facing);
     }
+
+    // ボスが出した弾と衝撃波
+    for (const p of projectiles) this.drawProjectile(p, cameraX);
 
     // イカダの部品(素材があれば画像、なければ黄色の小さな四角形)
     const partImg = this.assets.get('part');
@@ -256,6 +249,97 @@ export class Renderer {
         ctx.fillRect(x, y, 24, 3);
       }
     }
+  }
+
+  /** ボス 1 体を描く。予備動作は点滅、もぐっている間は盛り上がりだけ、転がっている間は円、変身中は赤白の点滅。 */
+  private drawBoss(boss: Boss, bx: number, facing: Facing): void {
+    const { ctx } = this;
+    const flags = bossFlags(boss);
+    const rect = bossRect(boss); // 休んで身をかがめている間は、高さが低い
+    const top = this.sy(rect.y);
+    const bh = rect.h;
+
+    if (flags.hidden) {
+      // もぐっている: 地面に小さな盛り上がりだけを描く
+      ctx.fillStyle = boss.color;
+      ctx.fillRect(bx + boss.w / 2 - 20, this.sy(boss.y + boss.h) - 8, 40, 8);
+      return;
+    }
+
+    // 点滅: 予備動作(白と元の色)、変身中(赤と白)
+    const flash = Math.floor(Math.max(boss.t, 0) / 0.08) % 2 === 0;
+    const transformFlash = boss.transformT > 0 && Math.floor(boss.transformT / 0.08) % 2 === 0;
+    let color = boss.color;
+    if (flags.telegraph && flash) color = '#ffffff';
+    if (transformFlash) color = '#ffffff';
+
+    const bossImg = this.assets.get('boss');
+    if (bossImg && color === boss.color) {
+      this.drawSprite(bossImg, { x: bx, y: top, w: boss.w, h: bh }, facing);
+    } else if (flags.stompImmune) {
+      // 転がっている: 円
+      const r = boss.w / 2;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(bx + r, top + bh - r, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#00000044';
+      ctx.fillRect(bx + r - 3, top + bh - r * 2, 6, r * 2);
+    } else {
+      ctx.fillStyle = color;
+      ctx.fillRect(bx, top, boss.w, bh);
+      // 強化形態は、赤い縁取り
+      if (boss.form === 2) {
+        ctx.strokeStyle = '#ff1744';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(bx + 2, top + 2, boss.w - 4, bh - 4);
+      }
+      // 目(向きに寄せる)。大型のボスは大きく描く
+      const k = boss.w / 80;
+      const shift = facing === 1 ? 6 * k : -6 * k;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(bx + boss.w * 0.25 + shift, top + bh * 0.15, 14 * k, 18 * k);
+      ctx.fillRect(bx + boss.w * 0.6 + shift, top + bh * 0.15, 14 * k, 18 * k);
+      ctx.fillStyle = '#111111';
+      ctx.fillRect(bx + boss.w * 0.25 + shift + 4 * k, top + bh * 0.15 + 5 * k, 6 * k, 9 * k);
+      ctx.fillRect(bx + boss.w * 0.6 + shift + 4 * k, top + bh * 0.15 + 5 * k, 6 * k, 9 * k);
+      // 最終ボスは、角を付ける
+      if (boss.kind === 'nushi') {
+        ctx.fillStyle = '#ffd740';
+        ctx.fillRect(bx + 20, top - 24, 24, 24);
+        ctx.fillRect(bx + boss.w - 44, top - 24, 24, 24);
+      }
+    }
+
+    // 残り体力バー(頭上)
+    const seg = boss.w / boss.maxHp;
+    for (let i = 0; i < boss.maxHp; i++) {
+      ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
+      ctx.fillRect(bx + i * seg + 1, top - (boss.kind === 'nushi' ? 32 : 12), seg - 2, 8);
+    }
+  }
+
+  /** 弾(黄色の円)・放物線の弾(オレンジの円)・衝撃波(赤い帯)を描く。画面外は描かない。 */
+  private drawProjectile(p: Projectile, cameraX: number): void {
+    if (!p.alive) return;
+    const x = worldToScreen(p.x, cameraX);
+    const y = this.sy(p.y);
+    if (x + p.w < 0 || x > VIEW_WIDTH || y > VIEW_HEIGHT || y + p.h < 0) return;
+    const { ctx } = this;
+    if (p.kind === 'wave') {
+      ctx.fillStyle = '#e53935';
+      ctx.fillRect(x, y, p.w, p.h);
+      ctx.fillStyle = '#ff8a80';
+      ctx.fillRect(x, y, p.w, 6);
+      return;
+    }
+    ctx.fillStyle = p.kind === 'shot' ? '#ffeb3b' : '#ff9800';
+    ctx.beginPath();
+    ctx.arc(x + p.w / 2, y + p.h / 2, p.w / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#6d4c00';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   /** ザコ敵を図形で描く。本体の色は種類ごとに異なり、目と、種類ごとの目印を付ける。 */

@@ -1,6 +1,5 @@
 import type { Rect } from './collision';
 import {
-  BOSS_WIDTH,
   ENEMY_SIZE,
   FIXED_DT,
   SEA_X,
@@ -96,11 +95,11 @@ export function validatePlacements(stage: Stage): string[] {
   if (stage.bosses.length !== 10) errors.push(`ボスが 10 体ではない: ${stage.bosses.length}`);
   for (const [i, b] of stage.bosses.entries()) {
     const x0 = b.left - BOSS_MARGIN;
-    const x1 = b.right + BOSS_WIDTH + BOSS_MARGIN;
+    const x1 = b.right + b.def.w + BOSS_MARGIN;
     if (touchesFeature(stage, x0, x1)) errors.push(`ボス ${i} の前後に穴・崖・浮島がある: ${x0}〜${x1}`);
     if (b.left < START_SAFE || x1 > SEA_X - SHORE_SAFE) errors.push(`ボス ${i} が安全な区間にいる`);
     const prev = stage.bosses[i - 1];
-    if (prev && b.left <= prev.right + BOSS_WIDTH) errors.push(`ボス ${i} が前のボスの範囲と重なる、または順序が逆`);
+    if (prev && b.left <= prev.right + prev.def.w) errors.push(`ボス ${i} が前のボスの範囲と重なる、または順序が逆`);
   }
 
   // ザコ敵: 30 体以上、10 種類すべてが 3 体以上
@@ -116,7 +115,7 @@ export function validatePlacements(stage: Stage): string[] {
     if (x0 < START_SAFE || x1 > SEA_X - SHORE_SAFE) errors.push(`ザコ敵 ${i}(${e.kind}) が安全な区間にいる`);
     if (e.x < e.left || e.x > e.right) errors.push(`ザコ敵 ${i}(${e.kind}) の初期位置が範囲の外`);
     for (const [j, b] of stage.bosses.entries()) {
-      if (overlapsRange(x0, x1, b.left - BOSS_MARGIN, b.right + BOSS_WIDTH + BOSS_MARGIN)) {
+      if (overlapsRange(x0, x1, b.left - BOSS_MARGIN, b.right + b.def.w + BOSS_MARGIN)) {
         errors.push(`ザコ敵 ${i}(${e.kind}) がボス ${j} の範囲と重なる`);
       }
     }

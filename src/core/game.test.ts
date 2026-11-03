@@ -55,7 +55,7 @@ describe('createGame', () => {
     for (const b of g.bosses) {
       expect(b.alive).toBe(true);
       expect(b.hp).toBe(b.maxHp);
-      expect(b.y + BOSS_HEIGHT).toBe(GROUND_Y);
+      expect(b.y + b.h).toBe(GROUND_Y);
     }
     expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
     expect(g.parts).toEqual([]);

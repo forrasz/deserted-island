@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_HEIGHT, BOSS_INVULN_TIME, BOSS_MAX_HP, BOSS_SPEED, FIXED_DT, GROUND_Y } from './config';
-import { BOSS_DEFS, createBoss, damageBoss, stepBoss, type Boss } from './boss';
+import { BOSS_DEFS, bossRect, createBoss, damageBoss, stepBoss, type Boss } from './boss';
 
 function run(boss: Boss, steps: number): Boss {
   let b = boss;
@@ -100,15 +100,39 @@ describe('BOSS_DEFS(ボス 10 体の定義)', () => {
     expect(BOSS_DEFS.map((d) => d.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
-  it('最大体力は 3 以上 5 以下で、先のボスの体力は手前のボスの体力以上', () => {
-    for (const d of BOSS_DEFS) {
+  it('1〜9 体目の最大体力は 3 以上 5 以下で、先のボスの体力は手前のボスの体力以上。10 体目は 12', () => {
+    const regular = BOSS_DEFS.slice(0, 9);
+    for (const d of regular) {
       expect(d.maxHp).toBeGreaterThanOrEqual(3);
       expect(d.maxHp).toBeLessThanOrEqual(5);
     }
-    for (let i = 1; i < BOSS_DEFS.length; i++) {
-      expect(BOSS_DEFS[i]!.maxHp).toBeGreaterThanOrEqual(BOSS_DEFS[i - 1]!.maxHp);
+    for (let i = 1; i < regular.length; i++) {
+      expect(regular[i]!.maxHp).toBeGreaterThanOrEqual(regular[i - 1]!.maxHp);
     }
-    expect(new Set(BOSS_DEFS.map((d) => d.maxHp)).size).toBeGreaterThanOrEqual(3);
+    expect(new Set(regular.map((d) => d.maxHp)).size).toBeGreaterThanOrEqual(3);
+    expect(BOSS_DEFS[9]!.maxHp).toBe(12);
+    expect(BOSS_DEFS[9]!.maxHp).toBeGreaterThan(Math.max(...regular.map((d) => d.maxHp)));
+  });
+
+  it('名前と種類は、10 体ですべて異なる(1 体目は「カクレモモジリ」、10 体目は「ヌシ」)', () => {
+    expect(new Set(BOSS_DEFS.map((d) => d.name)).size).toBe(10);
+    expect(new Set(BOSS_DEFS.map((d) => d.kind)).size).toBe(10);
+    expect(BOSS_DEFS[0]!.name).toBe('カクレモモジリ');
+    expect(BOSS_DEFS[9]!.name).toBe('ヌシ');
+    expect(BOSS_DEFS[9]!.kind).toBe('nushi');
+  });
+
+  it('大きさは、通常のボスが 80×100、最終ボスだけが 200×250(約 2.5 倍)', () => {
+    for (const d of BOSS_DEFS.slice(0, 9)) {
+      expect([d.w, d.h]).toEqual([80, 100]);
+    }
+    expect([BOSS_DEFS[9]!.w, BOSS_DEFS[9]!.h]).toEqual([200, 250]);
+    expect(BOSS_DEFS[9]!.w / 80).toBe(2.5);
+    expect(BOSS_DEFS[9]!.h / 100).toBe(2.5);
+  });
+
+  it('色は、図形で見分けられるように、ボスごとに異なる', () => {
+    expect(new Set(BOSS_DEFS.map((d) => d.color)).size).toBe(10);
   });
 
   it('往復の速さは最初が 80、最後が 140 で、先のボスほど速い', () => {
@@ -126,13 +150,28 @@ describe('BOSS_DEFS(ボス 10 体の定義)', () => {
 
 describe('定義から作るボス', () => {
   it('定義の体力・速さで作られ、初期の体力は最大体力に等しい', () => {
-    const def = BOSS_DEFS[9]!;
+    const def = BOSS_DEFS[8]!;
     const b = createBoss(1000, 1000, 1500, GROUND_Y, def);
-    expect(b.id).toBe(9);
+    expect(b.id).toBe(8);
     expect(b.maxHp).toBe(5);
     expect(b.hp).toBe(5);
-    expect(b.speed).toBe(140);
-    expect(Math.abs(b.vx)).toBe(140);
+    expect(b.speed).toBe(134);
+    expect(Math.abs(b.vx)).toBe(134);
+  });
+
+  it('最終ボスは、定義の大きさで、下辺が地面に揃って作られ、当たり判定の矩形も大きさに合う', () => {
+    const b = createBoss(1000, 1000, 1600, GROUND_Y, BOSS_DEFS[9]!);
+    expect(b.maxHp).toBe(12);
+    expect(b.hp).toBe(12);
+    expect(b.w).toBe(200);
+    expect(b.h).toBe(250);
+    expect(b.y + b.h).toBe(GROUND_Y);
+    expect(bossRect(b)).toEqual({ x: 1000, y: GROUND_Y - 250, w: 200, h: 250 });
+  });
+
+  it('既定のボス(従来の 1 体)は、80×100 の矩形', () => {
+    const b = createBoss();
+    expect(bossRect(b)).toEqual({ x: b.x, y: GROUND_Y - 100, w: 80, h: 100 });
   });
 
   it('往復で向きが反転しても、速さは定義のまま保たれる', () => {
