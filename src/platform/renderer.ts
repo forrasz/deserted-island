@@ -1,5 +1,10 @@
 import { worldToScreen } from '../core/camera';
 import {
+  BOSS_HEIGHT,
+  BOSS_MAX_HP,
+  BOSS_WIDTH,
+  PART_HEIGHT,
+  PART_WIDTH,
   GROUND_Y,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -7,7 +12,7 @@ import {
   VIEW_WIDTH,
   WORLD_WIDTH,
 } from '../core/config';
-import type { Player } from '../core/player';
+import type { GameState } from '../core/game';
 
 const MARKER_INTERVAL = 160;
 
@@ -29,8 +34,9 @@ export class Renderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  draw(player: Player, cameraX: number): void {
+  draw(state: GameState, cameraX: number): void {
     const { ctx } = this;
+    const { player, boss, parts, partsCollected } = state;
 
     // 空
     ctx.fillStyle = '#87ceeb';
@@ -50,8 +56,40 @@ export class Renderer {
       ctx.fillRect(worldToScreen(wx, cameraX) - 2, GROUND_Y + 8, 4, VIEW_HEIGHT - GROUND_Y - 8);
     }
 
+    // ボス「カクレモモジリ」(緑の四角形 + 頭上の残り体力バー)
+    if (boss.alive) {
+      const bx = worldToScreen(boss.x, cameraX);
+      ctx.fillStyle = '#2e8b57';
+      ctx.fillRect(bx, boss.y, BOSS_WIDTH, BOSS_HEIGHT);
+      const seg = BOSS_WIDTH / BOSS_MAX_HP;
+      for (let i = 0; i < BOSS_MAX_HP; i++) {
+        ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
+        ctx.fillRect(bx + i * seg + 1, boss.y - 12, seg - 2, 8);
+      }
+    }
+
+    // イカダの部品(黄色の小さな四角形)
+    for (const part of parts) {
+      const px = worldToScreen(part.x, cameraX);
+      ctx.fillStyle = '#ffd700';
+      ctx.fillRect(px, part.y, PART_WIDTH, PART_HEIGHT);
+      ctx.strokeStyle = '#8a6d00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px + 1, part.y + 1, PART_WIDTH - 2, PART_HEIGHT - 2);
+    }
+
     // プレイヤー(四角形)
     ctx.fillStyle = '#d2362b';
     ctx.fillRect(worldToScreen(player.x, cameraX), player.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+
+    // HUD(画面座標の固定位置。カメラの影響を受けない)
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000000';
+    ctx.fillStyle = '#ffffff';
+    const label = `イカダの部品: ${partsCollected}`;
+    ctx.strokeText(label, 16, 12);
+    ctx.fillText(label, 16, 12);
   }
 }
