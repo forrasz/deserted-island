@@ -58,7 +58,7 @@ export const RAFT_SPRITE_HEIGHT = 48;
 export const RAFT_SPRITE_MARGIN = 20;
 
 // --- プレイヤーのHP・被弾 ---
-export const PLAYER_MAX_HP = 3;
+export const PLAYER_MAX_HP = 5;
 /** 被弾後の無敵時間(秒)。 */
 export const PLAYER_INVULN_TIME = 2;
 /** 被弾したときの跳ね上がりの初速(px/s、上向き)。 */

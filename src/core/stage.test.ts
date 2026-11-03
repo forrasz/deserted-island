@@ -7,6 +7,7 @@ import {
   SEA_X,
   WORLD_HEIGHT,
   WORLD_WIDTH,
+  PLAYER_MAX_HP,
 } from './config';
 import { createGame, stepGame } from './game';
 import { NO_INPUT } from './input';
@@ -231,7 +232,7 @@ describe('既定の世界(ステージ)でのゲーム', () => {
   it('何もしなくても、落下せずにその場に立ち続ける(HP は変化しない)', () => {
     let g = createGame();
     for (let i = 0; i < 300; i++) g = stepGame(g, NO_INPUT);
-    expect(g.hp).toBe(3);
+    expect(g.hp).toBe(PLAYER_MAX_HP);
     expect(g.player.onGround).toBe(true);
   });
 });

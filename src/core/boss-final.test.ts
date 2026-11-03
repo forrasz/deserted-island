@@ -10,6 +10,7 @@ import {
   GROUND_Y,
   PLAYER_HEIGHT,
   STOMP_BOUNCE_SPEED,
+  PLAYER_MAX_HP,
 } from './config';
 import { createGame, stepGame, type GameState } from './game';
 import { NO_INPUT } from './input';
@@ -176,7 +177,7 @@ describe('ヌシ: 形態変化(5.2)', () => {
     expect(g.bosses[0]!.transformT).toBeGreaterThan(0);
     expect(g.bosses[0]!.hp).toBe(6);
     expect(g.player.vy).toBe(-STOMP_BOUNCE_SPEED); // 跳ね返るだけ
-    expect(g.hp).toBe(3); // 被弾もしない
+    expect(g.hp).toBe(PLAYER_MAX_HP); // 被弾もしない
   });
 
   it('体力が 7 から、踏みつけで 6 になったら、次の更新で変身に入る', () => {

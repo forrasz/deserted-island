@@ -67,10 +67,10 @@ describe('ゲームオーバーへの遷移', () => {
     expect(f.game.hp).toBe(1);
   });
 
-  it('3 回被弾するとゲームオーバーになる(HP 3 → 2 → 1 → 0)', () => {
+  it('HPの数だけ被弾するとゲームオーバーになる', () => {
     let f = aboutToBeHit(PLAYER_MAX_HP);
     const phases: string[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < PLAYER_MAX_HP; i++) {
       f = stepFlow(
         { ...f, game: { ...f.game, player: createPlayer(1000 - PLAYER_WIDTH + 10), hitInvuln: 0 } },
         NO_INPUT,
@@ -78,7 +78,7 @@ describe('ゲームオーバーへの遷移', () => {
       );
       phases.push(f.phase);
     }
-    expect(phases).toEqual(['playing', 'playing', 'gameover']);
+    expect(phases).toEqual([...Array(PLAYER_MAX_HP - 1).fill('playing'), 'gameover']);
   });
 
   it('同じ更新で脱出とHP 0 が重なったときは、クリアが優先される', () => {
@@ -119,11 +119,11 @@ describe('ゲームオーバー画面', () => {
     expect(f.phase).toBe('playing');
   });
 
-  it('Enter で、HP 3・無敵 0・所持数 0・イカダ未完成・ボス体力 3・部品なしの初期状態から再開する', () => {
+  it('Enter で、HP 最大・無敵 0・所持数 0・イカダ未完成・ボス体力 3・部品なしの初期状態から再開する', () => {
     const f = stepFlow(gameover(), ENTER, FIXED_DT);
     expect(f.phase).toBe('playing');
     expect(f.game).toEqual(createGame());
-    expect(f.game.hp).toBe(3);
+    expect(f.game.hp).toBe(PLAYER_MAX_HP);
     expect(f.game.hitInvuln).toBe(0);
     expect(f.game.dead).toBe(false);
     expect(f.game.partsCollected).toBe(0);
