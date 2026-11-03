@@ -1,4 +1,4 @@
-import { worldToScreen } from '../core/camera';
+import { worldToScreen, worldToScreenY } from '../core/camera';
 import type { Rect } from '../core/collision';
 import {
   BOSS_HEIGHT,
@@ -17,11 +17,13 @@ import {
   PLAYER_WIDTH,
   VIEW_HEIGHT,
   VIEW_WIDTH,
+  WORLD_HEIGHT,
 } from '../core/config';
 import { blinkVisible } from '../core/blink';
 import { nextFacing, type Facing } from '../core/facing';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
+import { STAGE } from '../core/stage';
 import type { AssetStore } from './assets';
 
 const MARKER_INTERVAL = 160;
@@ -30,6 +32,8 @@ export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private playerFacing: Facing = 1;
   private bossFacing: Facing = 1;
+  /** 描画中のカメラ y(ワールド y を画面 y に変換するのに使う)。 */
+  private cameraY = 0;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -49,8 +53,9 @@ export class Renderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  draw(flow: Flow, cameraX: number): void {
+  draw(flow: Flow, cameraX: number, cameraY: number = WORLD_HEIGHT - VIEW_HEIGHT): void {
     const { ctx } = this;
+    this.cameraY = cameraY;
     const { player, boss, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
 
     // 背景(素材があれば視差つきで横に繰り返す。なければ空色)
@@ -61,6 +66,9 @@ export class Renderer {
     this.drawGround(cameraX, seaScreenX);
     this.drawSea(cameraX, seaScreenX);
 
+    // 崖と浮島(図形)
+    this.drawTerrain(cameraX);
+
     // 完成したイカダ(砂浜の端)
     if (raftComplete) this.drawRaft(cameraX);
 
@@ -70,15 +78,15 @@ export class Renderer {
       const bx = worldToScreen(boss.x, cameraX);
       const bossImg = this.assets.get('boss');
       if (bossImg) {
-        this.drawSprite(bossImg, { x: bx, y: boss.y, w: BOSS_WIDTH, h: BOSS_HEIGHT }, this.bossFacing);
+        this.drawSprite(bossImg, { x: bx, y: this.sy(boss.y), w: BOSS_WIDTH, h: BOSS_HEIGHT }, this.bossFacing);
       } else {
         ctx.fillStyle = '#2e8b57';
-        ctx.fillRect(bx, boss.y, BOSS_WIDTH, BOSS_HEIGHT);
+        ctx.fillRect(bx, this.sy(boss.y), BOSS_WIDTH, BOSS_HEIGHT);
       }
       const seg = BOSS_WIDTH / BOSS_MAX_HP;
       for (let i = 0; i < BOSS_MAX_HP; i++) {
         ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
-        ctx.fillRect(bx + i * seg + 1, boss.y - 12, seg - 2, 8);
+        ctx.fillRect(bx + i * seg + 1, this.sy(boss.y) - 12, seg - 2, 8);
       }
     }
 
@@ -87,13 +95,13 @@ export class Renderer {
     for (const part of parts) {
       const px = worldToScreen(part.x, cameraX);
       if (partImg) {
-        this.drawSprite(partImg, { x: px, y: part.y, w: PART_WIDTH, h: PART_HEIGHT }, 1);
+        this.drawSprite(partImg, { x: px, y: this.sy(part.y), w: PART_WIDTH, h: PART_HEIGHT }, 1);
       } else {
         ctx.fillStyle = '#ffd700';
-        ctx.fillRect(px, part.y, PART_WIDTH, PART_HEIGHT);
+        ctx.fillRect(px, this.sy(part.y), PART_WIDTH, PART_HEIGHT);
         ctx.strokeStyle = '#8a6d00';
         ctx.lineWidth = 2;
-        ctx.strokeRect(px + 1, part.y + 1, PART_WIDTH - 2, PART_HEIGHT - 2);
+        ctx.strokeRect(px + 1, this.sy(part.y) + 1, PART_WIDTH - 2, PART_HEIGHT - 2);
       }
     }
 
@@ -102,7 +110,7 @@ export class Renderer {
     const playerImg = this.assets.get('player');
     const playerBox = {
       x: worldToScreen(player.x, cameraX),
-      y: player.y,
+      y: this.sy(player.y),
       w: PLAYER_WIDTH,
       h: PLAYER_HEIGHT,
     };
@@ -167,58 +175,102 @@ export class Renderer {
     }
   }
 
-  /** 地面・海の帯(GROUND_Y から画面下端)を、画像のタイルで [x0, x1) に描く。継ぎ目はワールド固定。 */
+  /** ワールド y を画面 y に変換する(カメラの縦のずらし)。 */
+  private sy(worldY: number): number {
+    return worldToScreenY(worldY, this.cameraY);
+  }
+
+  /** 地面・海の帯(地面の上面からステージの下端まで、80px)を、画像のタイルで [x0, x1) に描く。継ぎ目はワールド固定。 */
   private drawTiles(img: HTMLImageElement, cameraX: number, x0: number, x1: number): void {
     if (x1 <= x0) return;
     const { ctx } = this;
-    const bandH = VIEW_HEIGHT - GROUND_Y;
+    const bandH = WORLD_HEIGHT - GROUND_Y;
+    const top = this.sy(GROUND_Y);
     const tw = (img.naturalWidth * bandH) / img.naturalHeight;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(x0, GROUND_Y, x1 - x0, bandH);
+    ctx.rect(x0, top, x1 - x0, bandH);
     ctx.clip();
     for (let x = tileStartX(cameraX, tw); x < x1; x += tw) {
-      if (x + tw > x0) ctx.drawImage(img, x, GROUND_Y, tw + 1, bandH);
+      if (x + tw > x0) ctx.drawImage(img, x, top, tw + 1, bandH);
     }
     ctx.restore();
   }
 
+  /** 地面(砂浜)。穴で分割された区間ごとに描き、穴は描かない(背景が見える)。 */
   private drawGround(cameraX: number, seaScreenX: number): void {
     const { ctx } = this;
     const img = this.assets.get('ground');
-    if (img) {
-      this.drawTiles(img, cameraX, 0, seaScreenX);
-      return;
-    }
-    ctx.fillStyle = '#e0c068';
-    ctx.fillRect(0, GROUND_Y, seaScreenX, VIEW_HEIGHT - GROUND_Y);
-    ctx.fillStyle = '#6b8e23';
-    ctx.fillRect(0, GROUND_Y, seaScreenX, 8);
+    const bandH = WORLD_HEIGHT - GROUND_Y;
+    const top = this.sy(GROUND_Y);
+    const slabs = (STAGE.world.solids ?? []).filter((r) => r.y === GROUND_Y);
+    for (const slab of slabs) {
+      const x0 = Math.max(worldToScreen(slab.x, cameraX), 0);
+      const x1 = Math.min(worldToScreen(slab.x + slab.w, cameraX), seaScreenX);
+      if (x1 <= x0) continue;
+      if (img) {
+        this.drawTiles(img, cameraX, x0, x1);
+        continue;
+      }
+      ctx.fillStyle = '#e0c068';
+      ctx.fillRect(x0, top, x1 - x0, bandH);
+      ctx.fillStyle = '#6b8e23';
+      ctx.fillRect(x0, top, x1 - x0, 8);
 
-    // スクロールが分かる目印(一定間隔の縦線。海には描かない)
-    ctx.fillStyle = '#b8964a';
-    const first = Math.floor(cameraX / MARKER_INTERVAL) * MARKER_INTERVAL;
-    for (let wx = first; wx <= cameraX + VIEW_WIDTH; wx += MARKER_INTERVAL) {
-      if (wx < 0 || wx >= SEA_X) continue;
-      ctx.fillRect(worldToScreen(wx, cameraX) - 2, GROUND_Y + 8, 4, VIEW_HEIGHT - GROUND_Y - 8);
+      // スクロールが分かる目印(一定間隔の縦線。海には描かない)
+      ctx.fillStyle = '#b8964a';
+      const wx0 = cameraX + x0;
+      const wx1 = cameraX + x1;
+      for (let wx = Math.ceil(wx0 / MARKER_INTERVAL) * MARKER_INTERVAL; wx <= wx1; wx += MARKER_INTERVAL) {
+        if (wx < 0 || wx >= SEA_X) continue;
+        ctx.fillRect(worldToScreen(wx, cameraX) - 2, top + 8, 4, bandH - 8);
+      }
     }
   }
 
   private drawSea(cameraX: number, seaScreenX: number): void {
     if (seaScreenX >= VIEW_WIDTH) return;
     const { ctx } = this;
+    const top = this.sy(GROUND_Y);
+    const bandH = WORLD_HEIGHT - GROUND_Y;
     const img = this.assets.get('sea');
     if (img) {
       this.drawTiles(img, cameraX, seaScreenX, VIEW_WIDTH);
       return;
     }
     ctx.fillStyle = '#1e6fb8';
-    ctx.fillRect(seaScreenX, GROUND_Y, VIEW_WIDTH - seaScreenX, VIEW_HEIGHT - GROUND_Y);
+    ctx.fillRect(seaScreenX, top, VIEW_WIDTH - seaScreenX, bandH);
     ctx.fillStyle = '#4a9be0';
-    for (let y = GROUND_Y + 14; y < VIEW_HEIGHT; y += 24) {
+    for (let y = top + 14; y < top + bandH; y += 24) {
       for (let x = seaScreenX + 12; x < VIEW_WIDTH; x += 48) {
         ctx.fillRect(x, y, 24, 3);
       }
+    }
+  }
+
+  /** 崖(茶色の壁。上面に草の帯)と浮島(薄い足場)。図形で描く。画面外のものは描かない。 */
+  private drawTerrain(cameraX: number): void {
+    const { ctx } = this;
+    for (const c of STAGE.cliffs) {
+      const x = worldToScreen(c.x, cameraX);
+      const y = this.sy(c.y);
+      if (x + c.w < 0 || x > VIEW_WIDTH || y > VIEW_HEIGHT || y + c.h < 0) continue;
+      ctx.fillStyle = '#8b6b3d';
+      ctx.fillRect(x, y, c.w, c.h);
+      ctx.fillStyle = '#6b8e23';
+      ctx.fillRect(x, y, c.w, 8);
+      ctx.fillStyle = '#5c4526';
+      ctx.fillRect(x, y, 3, c.h);
+      ctx.fillRect(x + c.w - 3, y, 3, c.h);
+    }
+    for (const i of STAGE.islands) {
+      const x = worldToScreen(i.x, cameraX);
+      const y = this.sy(i.y);
+      if (x + i.w < 0 || x > VIEW_WIDTH || y > VIEW_HEIGHT || y + i.h < 0) continue;
+      ctx.fillStyle = '#7a5c2e';
+      ctx.fillRect(x, y, i.w, i.h);
+      ctx.fillStyle = '#5fa042';
+      ctx.fillRect(x, y, i.w, 7);
     }
   }
 
@@ -228,7 +280,7 @@ export class Renderer {
     if (img) {
       const box = {
         x: worldToScreen(SEA_X - RAFT_SPRITE_MARGIN - RAFT_SPRITE_WIDTH, cameraX),
-        y: GROUND_Y - RAFT_SPRITE_HEIGHT,
+        y: this.sy(GROUND_Y - RAFT_SPRITE_HEIGHT),
         w: RAFT_SPRITE_WIDTH,
         h: RAFT_SPRITE_HEIGHT,
       };
@@ -236,10 +288,11 @@ export class Renderer {
       return;
     }
     const rx = worldToScreen(SEA_X - 120, cameraX);
+    const ry = this.sy(GROUND_Y - 14);
     ctx.fillStyle = '#8b5a2b';
-    ctx.fillRect(rx, GROUND_Y - 14, 100, 14);
+    ctx.fillRect(rx, ry, 100, 14);
     ctx.fillStyle = '#5c3a1a';
-    for (let i = 1; i < 5; i++) ctx.fillRect(rx + i * 20 - 1, GROUND_Y - 14, 2, 14);
+    for (let i = 1; i < 5; i++) ctx.fillRect(rx + i * 20 - 1, ry, 2, 14);
   }
 
   private overlay(): void {

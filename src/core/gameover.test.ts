@@ -81,11 +81,11 @@ describe('ゲームオーバーへの遷移', () => {
   });
 
   it('同じ更新で脱出とHP 0 が重なったときは、クリアが優先される', () => {
-    const boss = stillBoss(3540);
+    const boss = stillBoss(SEA_X - 60);
     const f = stepFlow(
       playing({
         boss,
-        player: createPlayer(3600),
+        player: createPlayer(SEA_X),
         hp: 1,
         raftComplete: true,
         partsCollected: 1,

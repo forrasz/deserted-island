@@ -1,4 +1,4 @@
-import { VIEW_WIDTH, WORLD_WIDTH } from './config';
+import { VIEW_HEIGHT, VIEW_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from './config';
 
 /** プレイヤー中心にカメラ x を決め、ワールド範囲 [0, worldWidth - viewWidth] に収める。 */
 export function computeCameraX(
@@ -13,4 +13,19 @@ export function computeCameraX(
 /** ワールド x を画面 x に変換する。 */
 export function worldToScreen(worldX: number, cameraX: number): number {
   return worldX - cameraX;
+}
+
+/** プレイヤー中心にカメラ y を決め、ワールド範囲 [0, worldHeight - viewHeight] に収める。 */
+export function computeCameraY(
+  playerCenterY: number,
+  viewHeight: number = VIEW_HEIGHT,
+  worldHeight: number = WORLD_HEIGHT,
+): number {
+  const maxY = Math.max(0, worldHeight - viewHeight);
+  return Math.min(Math.max(playerCenterY - viewHeight / 2, 0), maxY);
+}
+
+/** ワールド y を画面 y に変換する。 */
+export function worldToScreenY(worldY: number, cameraY: number): number {
+  return worldY - cameraY;
 }

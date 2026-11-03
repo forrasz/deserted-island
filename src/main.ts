@@ -1,5 +1,5 @@
-import { computeCameraX } from './core/camera';
-import { FIXED_DT, PLAYER_WIDTH } from './core/config';
+import { computeCameraX, computeCameraY } from './core/camera';
+import { FIXED_DT, PLAYER_HEIGHT, PLAYER_WIDTH } from './core/config';
 import { createFlow, stepFlow } from './core/flow';
 import { FixedStepper } from './core/loop';
 import { loadAssets } from './platform/assets';
@@ -30,7 +30,12 @@ async function start(canvas: HTMLCanvasElement): Promise<void> {
       flow = stepFlow(flow, keyboard.snapshot(), FIXED_DT);
     }
 
-    renderer.draw(flow, computeCameraX(flow.game.player.x + PLAYER_WIDTH / 2));
+    const { player } = flow.game;
+    renderer.draw(
+      flow,
+      computeCameraX(player.x + PLAYER_WIDTH / 2),
+      computeCameraY(player.y + PLAYER_HEIGHT / 2),
+    );
     requestAnimationFrame(frame);
   }
 

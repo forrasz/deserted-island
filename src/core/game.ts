@@ -12,11 +12,12 @@ import {
   PLAYER_MAX_HP,
   PLAYER_WIDTH,
   RAFT_PARTS_REQUIRED,
+  RESPAWN_LOCK_TIME,
   SEA_X,
   STOMP_BOUNCE_SPEED,
   STOMP_TOLERANCE,
 } from './config';
-import type { InputState } from './input';
+import { NO_INPUT, type InputState } from './input';
 import {
   createPlayer,
   DEFAULT_WORLD,
@@ -25,6 +26,7 @@ import {
   type WorldBounds,
 } from './player';
 import { createPart, partRect, stepPart, type RaftPart } from './raft-part';
+import { fallYOf, isFullySupported, platformsOf, solidsOf } from './terrain';
 
 export interface GameState {
   player: Player;
@@ -42,11 +44,16 @@ export interface GameState {
   hitInvuln: number;
   /** HPが 0 になって死亡したか。 */
   dead: boolean;
+  /** 穴に落ちたときの復帰位置(足元の幅全体が足場に支えられていた直近の位置)。 */
+  respawn: { x: number; y: number };
+  /** 復帰直後の、操作を受け付けない残り時間(秒)。 */
+  respawnLock: number;
 }
 
 export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
+  const player = createPlayer(100, world);
   return {
-    player: createPlayer(100, world),
+    player,
     boss: createBoss(undefined, undefined, undefined, world.groundY),
     parts: [],
     partsCollected: 0,
@@ -55,6 +62,8 @@ export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
     hp: PLAYER_MAX_HP,
     hitInvuln: 0,
     dead: false,
+    respawn: { x: player.x, y: player.y },
+    respawnLock: 0,
   };
 }
 
@@ -118,16 +127,41 @@ export function stepGame(
   dt: number = FIXED_DT,
   world: WorldBounds = DEFAULT_WORLD,
 ): GameState {
-  const prevPlayer = state.player;
-  const movedPlayer = stepPlayer(prevPlayer, input, dt, world);
+  let prevPlayer = state.player;
+  // 復帰直後は、短い間だけ操作を受け付けない(押し続けたキーで、すぐ再び穴へ落ちないように)
+  const locked = state.respawnLock > 0;
+  let movedPlayer = stepPlayer(prevPlayer, locked ? NO_INPUT : input, dt, world);
+
+  // 穴への落下: HP を 1 減らし、直前の安全な足場へ戻す(無敵中でも被弾になる)
+  const fell = movedPlayer.y > fallYOf(world);
+  let respawn = state.respawn;
+  const respawnLock = fell ? RESPAWN_LOCK_TIME : Math.max(0, state.respawnLock - dt);
+  if (fell) {
+    movedPlayer = { x: respawn.x, y: respawn.y, vx: 0, vy: 0, onGround: true };
+    prevPlayer = movedPlayer;
+  } else if (
+    movedPlayer.onGround &&
+    isFullySupported(
+      movedPlayer.x,
+      movedPlayer.y,
+      PLAYER_WIDTH,
+      PLAYER_HEIGHT,
+      solidsOf(world),
+      platformsOf(world),
+    )
+  ) {
+    // 足元の幅全体が支えられている位置だけを、復帰用に記録する(縁・空中では更新しない)
+    respawn = { x: movedPlayer.x, y: movedPlayer.y };
+  }
+
   const movedBoss = stepBoss(state.boss, dt);
 
   // 無敵時間は更新の冒頭で減らす(被弾した更新では PLAYER_INVULN_TIME のまま、次の更新から減る)
-  const invulnLeft = Math.max(0, state.hitInvuln - dt);
+  const invulnLeft = fell ? PLAYER_INVULN_TIME : Math.max(0, state.hitInvuln - dt);
   const resolved = resolveBossContact(prevPlayer, movedPlayer, movedBoss, world, invulnLeft > 0);
   const player = resolved.player;
   const boss = resolved.boss;
-  const hp = resolved.hit ? Math.max(0, state.hp - 1) : state.hp;
+  const hp = Math.max(0, state.hp - (fell ? 1 : 0) - (resolved.hit ? 1 : 0));
   const hitInvuln = resolved.hit ? PLAYER_INVULN_TIME : invulnLeft;
 
   // 撃破された更新でのみ、ボス中央に部品を 1 個ドロップする
@@ -171,5 +205,7 @@ export function stepGame(
     hp,
     hitInvuln,
     dead: hp <= 0,
+    respawn,
+    respawnLock,
   };
 }
