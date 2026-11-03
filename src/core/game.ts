@@ -8,6 +8,8 @@ import {
   PART_WIDTH,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
+  RAFT_PARTS_REQUIRED,
+  SEA_X,
   STOMP_BOUNCE_SPEED,
   STOMP_TOLERANCE,
 } from './config';
@@ -27,6 +29,10 @@ export interface GameState {
   parts: RaftPart[];
   /** 拾得したイカダの部品の数。 */
   partsCollected: number;
+  /** 必要数の部品をそろえてイカダが完成したか。一度 true になれば保たれる。 */
+  raftComplete: boolean;
+  /** イカダで海へ到達し、脱出に成功したか。 */
+  escaped: boolean;
 }
 
 export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
@@ -35,6 +41,8 @@ export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
     boss: createBoss(undefined, undefined, undefined, world.groundY),
     parts: [],
     partsCollected: 0,
+    raftComplete: false,
+    escaped: false,
   };
 }
 
@@ -81,7 +89,7 @@ function resolveBossContact(
 
 /**
  * 1 回の固定ステップ分、ゲーム全体を更新する。
- * 順序: プレイヤー → ボス → 衝突解決 → ドロップ → 部品の落下 → 拾得
+ * 順序: プレイヤー → ボス → 衝突解決 → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
  */
 export function stepGame(
   state: GameState,
@@ -116,5 +124,17 @@ export function stepGame(
   const remaining = parts.filter((p) => !overlaps(pr, partRect(p)));
   const partsCollected = state.partsCollected + (parts.length - remaining.length);
 
-  return { player, boss, parts: remaining, partsCollected };
+  // イカダの完成(部品は減らないので、一度完成すれば保たれる)
+  const raftComplete = partsCollected >= RAFT_PARTS_REQUIRED;
+
+  // 海: イカダ完成後は到達で脱出、未完成の間は入れない
+  let escaped = state.escaped;
+  let finalPlayer = player;
+  if (raftComplete) {
+    if (player.x + PLAYER_WIDTH >= SEA_X) escaped = true;
+  } else if (player.x + PLAYER_WIDTH > SEA_X) {
+    finalPlayer = { ...player, x: SEA_X - PLAYER_WIDTH };
+  }
+
+  return { player: finalPlayer, boss, parts: remaining, partsCollected, raftComplete, escaped };
 }

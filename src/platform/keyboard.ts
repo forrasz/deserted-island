@@ -3,7 +3,8 @@ import type { InputState } from '../core/input';
 const LEFT_CODES = ['ArrowLeft', 'KeyA'];
 const RIGHT_CODES = ['ArrowRight', 'KeyD'];
 const JUMP_CODES = ['Space'];
-const HANDLED = new Set([...LEFT_CODES, ...RIGHT_CODES, ...JUMP_CODES]);
+const CONFIRM_CODES = ['Enter', 'NumpadEnter'];
+const HANDLED = new Set([...LEFT_CODES, ...RIGHT_CODES, ...JUMP_CODES, ...CONFIRM_CODES]);
 
 /** `event.code` ベースのキー入力。押下状態を保持し、更新ごとに InputState へ変換する。 */
 export class Keyboard {
@@ -33,6 +34,7 @@ export class Keyboard {
       left: any(LEFT_CODES),
       right: any(RIGHT_CODES),
       jump: any(JUMP_CODES),
+      confirm: any(CONFIRM_CODES),
     };
   }
 }

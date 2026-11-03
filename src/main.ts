@@ -1,6 +1,6 @@
 import { computeCameraX } from './core/camera';
 import { FIXED_DT, PLAYER_WIDTH } from './core/config';
-import { createGame, stepGame } from './core/game';
+import { createFlow, stepFlow } from './core/flow';
 import { FixedStepper } from './core/loop';
 import { Keyboard } from './platform/keyboard';
 import { Renderer } from './platform/renderer';
@@ -14,7 +14,7 @@ const renderer = new Renderer(canvas);
 window.addEventListener('resize', () => renderer.resize());
 
 const stepper = new FixedStepper();
-let state = createGame();
+let flow = createFlow();
 let last = performance.now();
 
 function frame(now: number): void {
@@ -22,10 +22,10 @@ function frame(now: number): void {
   last = now;
 
   for (let i = 0; i < steps; i++) {
-    state = stepGame(state, keyboard.snapshot(), FIXED_DT);
+    flow = stepFlow(flow, keyboard.snapshot(), FIXED_DT);
   }
 
-  renderer.draw(state, computeCameraX(state.player.x + PLAYER_WIDTH / 2));
+  renderer.draw(flow, computeCameraX(flow.game.player.x + PLAYER_WIDTH / 2));
   requestAnimationFrame(frame);
 }
 

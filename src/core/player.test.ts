@@ -56,7 +56,7 @@ describe('左右移動', () => {
 
   it('左右同時押しでは x が変化しない', () => {
     const p = createPlayer(300);
-    expect(run(p, { left: true, right: true, jump: false }, 10).x).toBe(300);
+    expect(run(p, { ...NO_INPUT, left: true, right: true }, 10).x).toBe(300);
   });
 });
 

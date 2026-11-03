@@ -35,3 +35,9 @@ export const STOMP_TOLERANCE = 8;
 // --- イカダの部品 ---
 export const PART_WIDTH = 24;
 export const PART_HEIGHT = 24;
+
+// --- イカダ・海・脱出 ---
+/** イカダの完成に必要な部品の数。 */
+export const RAFT_PARTS_REQUIRED = 1;
+/** 海の開始位置(ワールド x)。これより右が海で、イカダ完成前は入れない。 */
+export const SEA_X = 3600;
