@@ -49,3 +49,12 @@ export const PARALLAX_FACTOR = 0.2;
 export const RAFT_SPRITE_WIDTH = 160;
 export const RAFT_SPRITE_HEIGHT = 48;
 export const RAFT_SPRITE_MARGIN = 20;
+
+// --- プレイヤーのHP・被弾 ---
+export const PLAYER_MAX_HP = 3;
+/** 被弾後の無敵時間(秒)。 */
+export const PLAYER_INVULN_TIME = 2;
+/** 被弾したときの跳ね上がりの初速(px/s、上向き)。 */
+export const HIT_BOUNCE_SPEED = 350;
+/** 無敵中の点滅の切り替え間隔(秒)。 */
+export const BLINK_PERIOD = 0.1;

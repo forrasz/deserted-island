@@ -5,6 +5,7 @@ import {
   BOSS_MAX_HP,
   BOSS_WIDTH,
   PARALLAX_FACTOR,
+  PLAYER_MAX_HP,
   PART_HEIGHT,
   PART_WIDTH,
   GROUND_Y,
@@ -17,6 +18,7 @@ import {
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from '../core/config';
+import { blinkVisible } from '../core/blink';
 import { nextFacing, type Facing } from '../core/facing';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
@@ -49,7 +51,7 @@ export class Renderer {
 
   draw(flow: Flow, cameraX: number): void {
     const { ctx } = this;
-    const { player, boss, parts, partsCollected, raftComplete } = flow.game;
+    const { player, boss, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
 
     // 背景(素材があれば視差つきで横に繰り返す。なければ空色)
     this.drawBackground(cameraX);
@@ -104,19 +106,23 @@ export class Renderer {
       w: PLAYER_WIDTH,
       h: PLAYER_HEIGHT,
     };
-    if (playerImg) {
-      this.drawSprite(playerImg, playerBox, this.playerFacing);
-    } else {
-      ctx.fillStyle = '#d2362b';
-      ctx.fillRect(playerBox.x, playerBox.y, playerBox.w, playerBox.h);
+    // 無敵中は点滅(素材の有無に関係なく同じ判定)
+    if (blinkVisible(hitInvuln)) {
+      if (playerImg) {
+        this.drawSprite(playerImg, playerBox, this.playerFacing);
+      } else {
+        ctx.fillStyle = '#d2362b';
+        ctx.fillRect(playerBox.x, playerBox.y, playerBox.w, playerBox.h);
+      }
     }
 
     // HUD(画面座標の固定位置。カメラの影響を受けない)
-    this.text(`イカダの部品: ${partsCollected}`, 16, 12, 24, 'left');
+    this.drawHp(hp);
+    this.text(`イカダの部品: ${partsCollected}`, 16, 44, 24, 'left');
     this.text(
       raftComplete ? 'イカダ: 完成! 右の海へ向かおう' : 'イカダ: 未完成',
       16,
-      44,
+      76,
       24,
       'left',
     );
@@ -128,6 +134,7 @@ export class Renderer {
 
     if (flow.phase === 'title') this.drawTitle();
     if (flow.phase === 'cleared') this.drawCleared();
+    if (flow.phase === 'gameover') this.drawGameOver();
   }
 
   /** 画像を当たり判定の矩形(画面座標)に合わせて描く。左向きは左右反転。 */
@@ -249,6 +256,20 @@ export class Renderer {
     this.text('イカダを完成させて、右端の海から脱出しよう', VIEW_WIDTH / 2, 420, 22, 'center');
   }
 
+  /** 画面左上のHP。「HP」の文字と、残りHPの数だけの赤いハート(失ったぶんは暗いハート)。 */
+  private drawHp(hp: number): void {
+    this.text('HP', 16, 12, 24, 'left');
+    for (let i = 0; i < PLAYER_MAX_HP; i++) {
+      this.text('♥', 72 + i * 30, 10, 28, 'left', i < hp ? '#ff4d4d' : '#4a4a4a');
+    }
+  }
+
+  private drawGameOver(): void {
+    this.overlay();
+    this.text('ゲームオーバー', VIEW_WIDTH / 2, 170, 72, 'center');
+    this.text('Enter キーでもう一度', VIEW_WIDTH / 2, 290, 32, 'center');
+  }
+
   private drawCleared(): void {
     this.overlay();
     this.text('脱出成功!', VIEW_WIDTH / 2, 170, 72, 'center');
@@ -256,7 +277,14 @@ export class Renderer {
   }
 
   /** 白い文字に黒い縁取り。 */
-  private text(label: string, x: number, y: number, size: number, align: CanvasTextAlign): void {
+  private text(
+    label: string,
+    x: number,
+    y: number,
+    size: number,
+    align: CanvasTextAlign,
+    color: string = '#ffffff',
+  ): void {
     const { ctx } = this;
     ctx.font = `bold ${size}px sans-serif`;
     ctx.textBaseline = 'top';
@@ -264,7 +292,7 @@ export class Renderer {
     ctx.lineWidth = Math.max(3, size / 6);
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#000000';
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = color;
     ctx.strokeText(label, x, y);
     ctx.fillText(label, x, y);
   }

@@ -6,7 +6,10 @@ import {
   FIXED_DT,
   PART_HEIGHT,
   PART_WIDTH,
+  HIT_BOUNCE_SPEED,
   PLAYER_HEIGHT,
+  PLAYER_INVULN_TIME,
+  PLAYER_MAX_HP,
   PLAYER_WIDTH,
   RAFT_PARTS_REQUIRED,
   SEA_X,
@@ -33,6 +36,12 @@ export interface GameState {
   raftComplete: boolean;
   /** イカダで海へ到達し、脱出に成功したか。 */
   escaped: boolean;
+  /** プレイヤーのHP。0 を下回らない。 */
+  hp: number;
+  /** 被弾後の残りの無敵時間(秒)。0 なら被弾しうる。 */
+  hitInvuln: number;
+  /** HPが 0 になって死亡したか。 */
+  dead: boolean;
 }
 
 export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
@@ -43,6 +52,9 @@ export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
     partsCollected: 0,
     raftComplete: false,
     escaped: false,
+    hp: PLAYER_MAX_HP,
+    hitInvuln: 0,
+    dead: false,
   };
 }
 
@@ -52,18 +64,20 @@ function playerRect(p: Player): Rect {
 
 /**
  * プレイヤーとボスの衝突解決。
- * 落下中かつ更新前の下辺がボス上辺付近なら踏みつけ(ダメージ + 跳ね返り)、
- * それ以外の重なりは水平方向へ押し戻す(ダメージなし)。
+ * 落下中かつ更新前の下辺がボス上辺付近なら踏みつけ(ボスにダメージ + 跳ね返り。プレイヤーは被弾しない)、
+ * それ以外の重なりは水平方向へ押し戻し、プレイヤーが無敵でなければ被弾(hit)として小さく跳ね上げる。
+ * 無敵中は押し戻しだけ行い、ボスはすり抜けられない。
  */
 function resolveBossContact(
   prevPlayer: Player,
   player: Player,
   boss: Boss,
   world: WorldBounds,
-): { player: Player; boss: Boss } {
-  if (!boss.alive) return { player, boss };
+  invulnerable: boolean,
+): { player: Player; boss: Boss; hit: boolean } {
+  if (!boss.alive) return { player, boss, hit: false };
   const amount = overlapAmount(playerRect(player), bossRect(boss));
-  if (!amount) return { player, boss };
+  if (!amount) return { player, boss, hit: false };
 
   const prevBottom = prevPlayer.y + PLAYER_HEIGHT;
   const isStomp = player.vy > 0 && prevBottom <= boss.y + STOMP_TOLERANCE;
@@ -77,6 +91,7 @@ function resolveBossContact(
         onGround: false,
       },
       boss: damageBoss(boss),
+      hit: false,
     };
   }
 
@@ -84,12 +99,18 @@ function resolveBossContact(
   const bossCenter = boss.x + BOSS_WIDTH / 2;
   const pushed = playerCenter < bossCenter ? player.x - amount.x : player.x + amount.x;
   const x = Math.min(Math.max(pushed, 0), world.width - PLAYER_WIDTH);
-  return { player: { ...player, x }, boss };
+  const pushedPlayer = { ...player, x };
+  if (invulnerable) return { player: pushedPlayer, boss, hit: false };
+  return {
+    player: { ...pushedPlayer, vy: -HIT_BOUNCE_SPEED, onGround: false },
+    boss,
+    hit: true,
+  };
 }
 
 /**
  * 1 回の固定ステップ分、ゲーム全体を更新する。
- * 順序: プレイヤー → ボス → 衝突解決 → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
+ * 順序: プレイヤー → ボス → 衝突解決(被弾・無敵) → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
  */
 export function stepGame(
   state: GameState,
@@ -101,9 +122,13 @@ export function stepGame(
   const movedPlayer = stepPlayer(prevPlayer, input, dt, world);
   const movedBoss = stepBoss(state.boss, dt);
 
-  const resolved = resolveBossContact(prevPlayer, movedPlayer, movedBoss, world);
+  // 無敵時間は更新の冒頭で減らす(被弾した更新では PLAYER_INVULN_TIME のまま、次の更新から減る)
+  const invulnLeft = Math.max(0, state.hitInvuln - dt);
+  const resolved = resolveBossContact(prevPlayer, movedPlayer, movedBoss, world, invulnLeft > 0);
   const player = resolved.player;
   const boss = resolved.boss;
+  const hp = resolved.hit ? Math.max(0, state.hp - 1) : state.hp;
+  const hitInvuln = resolved.hit ? PLAYER_INVULN_TIME : invulnLeft;
 
   // 撃破された更新でのみ、ボス中央に部品を 1 個ドロップする
   let parts = state.parts;
@@ -136,5 +161,15 @@ export function stepGame(
     finalPlayer = { ...player, x: SEA_X - PLAYER_WIDTH };
   }
 
-  return { player: finalPlayer, boss, parts: remaining, partsCollected, raftComplete, escaped };
+  return {
+    player: finalPlayer,
+    boss,
+    parts: remaining,
+    partsCollected,
+    raftComplete,
+    escaped,
+    hp,
+    hitInvuln,
+    dead: hp <= 0,
+  };
 }
