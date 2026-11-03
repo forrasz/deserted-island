@@ -37,7 +37,12 @@ function pitWorld(pitWidth: number, platforms: Rect[] = []): WorldBounds {
 
 function game(world: WorldBounds, over: Partial<GameState> = {}): GameState {
   // ボスは撃破済みにして、邪魔にならないようにする
-  return { ...createGame(world), boss: { ...createBoss(2500, 2500, 2500), alive: false, hp: 0 }, ...over };
+  return {
+    ...createGame(world),
+    bosses: [{ ...createBoss(2500, 2500, 2500), alive: false, hp: 0 }],
+    enemies: [],
+    ...over,
+  };
 }
 
 function standing(x: number): Player {

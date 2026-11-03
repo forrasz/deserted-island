@@ -22,7 +22,7 @@ function stillBoss(over: Partial<Boss> = {}): Boss {
 }
 
 function withBoss(boss: Boss, player: Player, extra: Partial<GameState> = {}): GameState {
-  return { ...createGame(), boss, player, ...extra };
+  return { ...createGame(), bosses: [boss], enemies: [], player, ...extra };
 }
 
 /** ボスの左側から、10px 重なって接触するプレイヤー(地面の上)。 */
@@ -58,7 +58,7 @@ describe('ボスとの接触による被弾', () => {
     expect(g.hitInvuln).toBe(PLAYER_INVULN_TIME);
     expect(g.player.vy).toBe(-HIT_BOUNCE_SPEED);
     expect(g.player.onGround).toBe(false);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
   });
 
   it('踏みつけでは被弾しない', () => {
@@ -66,7 +66,7 @@ describe('ボスとの接触による被弾', () => {
     const g = stepGame(withBoss(boss, airPlayerAbove(boss, 5, 300)), NO_INPUT, FIXED_DT);
     expect(g.hp).toBe(3);
     expect(g.hitInvuln).toBe(0);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP - 1);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP - 1);
   });
 
   it('撃破済みのボスの位置を通過しても被弾しない', () => {
@@ -127,7 +127,7 @@ describe('被弾後の無敵時間', () => {
       NO_INPUT,
       FIXED_DT,
     );
-    expect(g.boss.hp).toBe(1);
+    expect(g.bosses[0]!.hp).toBe(1);
     expect(g.player.vy).toBe(-STOMP_BOUNCE_SPEED);
     expect(g.hp).toBe(2);
   });

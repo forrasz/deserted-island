@@ -28,7 +28,7 @@ function stillBoss(over: Partial<Boss> = {}): Boss {
 }
 
 function withBoss(boss: Boss, player: Player, extra: Partial<GameState> = {}): GameState {
-  return { ...createGame(), boss, player, ...extra };
+  return { ...createGame(), bosses: [boss], enemies: [], player, ...extra };
 }
 
 /** ボスの真上(x が重なる位置)で、指定の高さ・速度の空中プレイヤー。 */
@@ -51,9 +51,13 @@ function run(s: GameState, input: InputState, n: number): GameState {
 describe('createGame', () => {
   it('ボスが 1 体、地面の上に体力 3 で存在し、部品はなく所持数は 0', () => {
     const g = createGame();
-    expect(g.boss.alive).toBe(true);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
-    expect(g.boss.y + BOSS_HEIGHT).toBe(GROUND_Y);
+    expect(g.bosses).toHaveLength(10);
+    for (const b of g.bosses) {
+      expect(b.alive).toBe(true);
+      expect(b.hp).toBe(b.maxHp);
+      expect(b.y + BOSS_HEIGHT).toBe(GROUND_Y);
+    }
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
     expect(g.parts).toEqual([]);
     expect(g.partsCollected).toBe(0);
   });
@@ -79,7 +83,7 @@ describe('踏みつけ', () => {
   it('落下中に上から重なると、ボスの体力が 1 減り上向きに跳ね返る', () => {
     const boss = stillBoss();
     const g = stepGame(withBoss(boss, airPlayerAbove(boss, 5, 300)), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP - 1);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP - 1);
     expect(g.player.vy).toBe(-STOMP_BOUNCE_SPEED);
     expect(g.player.onGround).toBe(false);
     expect(g.player.y + PLAYER_HEIGHT).toBe(boss.y);
@@ -89,21 +93,21 @@ describe('踏みつけ', () => {
     const boss = stillBoss();
     const p = airPlayerAbove(boss, -(STOMP_TOLERANCE - 1), 300); // 下辺が上辺より少し下
     const g = stepGame(withBoss(boss, p), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP - 1);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP - 1);
   });
 
   it('更新前の下辺が許容量を超えて深く重なっていれば踏みつけではない(側面扱い)', () => {
     const boss = stillBoss();
     const p = airPlayerAbove(boss, -(STOMP_TOLERANCE + 20), 300);
     const g = stepGame(withBoss(boss, p), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
   });
 
   it('上昇中の接触では踏みつけにならず、体力は減らない', () => {
     const boss = stillBoss();
     const p = airPlayerAbove(boss, -10, -500);
     const g = stepGame(withBoss(boss, p), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
   });
 
   it('跳ね返り直後の空中では、ジャンプ入力を与えても通常ジャンプは発生しない', () => {
@@ -118,14 +122,14 @@ describe('踏みつけ', () => {
   it('無敵時間中は踏みつけても体力は追加で減らない(跳ね返りは起きる)', () => {
     const boss = stillBoss({ hp: 2, invuln: BOSS_INVULN_TIME });
     const g = stepGame(withBoss(boss, airPlayerAbove(boss, 5, 300)), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(2);
+    expect(g.bosses[0]!.hp).toBe(2);
     expect(g.player.vy).toBe(-STOMP_BOUNCE_SPEED);
   });
 
   it('無敵時間の終了後は再び踏みつけでダメージが入る', () => {
     const boss = stillBoss({ hp: 2, invuln: 0 });
     const g = stepGame(withBoss(boss, airPlayerAbove(boss, 5, 300)), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(1);
+    expect(g.bosses[0]!.hp).toBe(1);
   });
 
   it('実際のジャンプで、ボスの上に落ちて踏みつけられる', () => {
@@ -136,7 +140,7 @@ describe('踏みつけ', () => {
     let hit = false;
     for (let i = 0; i < 120 && !hit; i++) {
       g = stepGame(g, RIGHT, FIXED_DT);
-      hit = g.boss.hp < BOSS_MAX_HP;
+      hit = g.bosses[0]!.hp < BOSS_MAX_HP;
     }
     expect(hit).toBe(true);
   });
@@ -147,7 +151,7 @@ describe('側面接触', () => {
     const boss = stillBoss();
     const player: Player = { ...createPlayer(boss.x - PLAYER_WIDTH + 10), vx: 0 };
     const g = stepGame(withBoss(boss, player), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
     expect(g.player.x + PLAYER_WIDTH).toBeLessThanOrEqual(boss.x);
   });
 
@@ -155,7 +159,7 @@ describe('側面接触', () => {
     const boss = stillBoss();
     const player = createPlayer(boss.x + BOSS_WIDTH - 10);
     const g = stepGame(withBoss(boss, player), NO_INPUT, FIXED_DT);
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
     expect(g.player.x).toBeGreaterThanOrEqual(boss.x + BOSS_WIDTH);
   });
 
@@ -166,7 +170,7 @@ describe('側面接触', () => {
       g = stepGame(g, RIGHT, FIXED_DT);
       expect(g.player.x + PLAYER_WIDTH).toBeLessThanOrEqual(boss.x + 1e-6);
     }
-    expect(g.boss.hp).toBe(BOSS_MAX_HP);
+    expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP);
   });
 
   it('押し戻しの結果、プレイヤーはワールド範囲を出ない', () => {
@@ -195,7 +199,7 @@ describe('ドロップ', () => {
   it('ボスを撃破した更新で、その位置に部品が 1 個出現する', () => {
     const boss = lastHitBoss();
     const g = stepGame(withBoss(boss, airPlayerAbove(boss, 5, 300)), NO_INPUT, FIXED_DT);
-    expect(g.boss.alive).toBe(false);
+    expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);
     const part = g.parts[0]!;
     expect(part.x + PART_WIDTH / 2).toBeCloseTo(boss.x + BOSS_WIDTH / 2, 6);
@@ -217,7 +221,7 @@ describe('ドロップ', () => {
   it('生存中のボスへのダメージ(撃破に至らない)では部品は出ない', () => {
     const boss = stillBoss({ hp: 2 });
     const g = stepGame(withBoss(boss, airPlayerAbove(boss, 5, 300)), NO_INPUT, FIXED_DT);
-    expect(g.boss.alive).toBe(true);
+    expect(g.bosses[0]!.alive).toBe(true);
     expect(g.parts).toHaveLength(0);
   });
 });
@@ -262,14 +266,14 @@ describe('通しの流れ', () => {
     let g = withBoss(stillBoss(), createPlayer(0));
     for (let hits = 0; hits < 3; hits++) {
       // ボスの真上から落下して踏みつける
-      g = { ...g, player: airPlayerAbove(g.boss, 5, 300) };
+      g = { ...g, player: airPlayerAbove(g.bosses[0]!, 5, 300) };
       g = stepGame(g, NO_INPUT, FIXED_DT);
-      expect(g.boss.hp).toBe(BOSS_MAX_HP - hits - 1);
+      expect(g.bosses[0]!.hp).toBe(BOSS_MAX_HP - hits - 1);
       // 無敵が切れるまで待つ(その間、プレイヤーは空中でボスの上)
       g = run({ ...g, player: { ...g.player, x: 0, y: GROUND_Y - PLAYER_HEIGHT, vy: 0, onGround: true } },
         NO_INPUT, Math.ceil(BOSS_INVULN_TIME / FIXED_DT) + 1);
     }
-    expect(g.boss.alive).toBe(false);
+    expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts.length + g.partsCollected).toBe(1);
     // 部品の位置まで歩いて拾う
     const target = g.parts[0]?.x ?? 0;

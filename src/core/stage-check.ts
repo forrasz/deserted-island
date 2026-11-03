@@ -1,6 +1,9 @@
 import type { Rect } from './collision';
 import {
+  BOSS_WIDTH,
+  ENEMY_SIZE,
   FIXED_DT,
+  SEA_X,
   HEADROOM,
   HIGH_RISE,
   MAX_GAP_HIGH,
@@ -13,6 +16,7 @@ import {
 } from './config';
 import { NO_INPUT, type InputState } from './input';
 import { stepPlayer, type Player } from './player';
+import { ENEMY_KINDS } from './enemy-defs';
 import type { RouteNode, Stage } from './stage';
 import { EPS, fallYOf, type WorldBounds } from './terrain';
 
@@ -66,6 +70,57 @@ export function validateStage(stage: Stage): string[] {
     }
   }
 
+  errors.push(...validatePlacements(stage));
+  return errors;
+}
+
+/** 敵とボスの活動範囲(x の区間)が、穴・崖・浮島にかかっていないか。 */
+function touchesFeature(stage: Stage, x0: number, x1: number): boolean {
+  const hit = (r: { x: number; w: number }) => r.x < x1 && x0 < r.x + r.w;
+  return stage.pits.some(hit) || stage.cliffs.some(hit) || stage.islands.some(hit);
+}
+
+/** 区間 [a0, a1] と [b0, b1] が重なるか。 */
+function overlapsRange(a0: number, a1: number, b0: number, b1: number): boolean {
+  return a0 < b1 && b0 < a1;
+}
+
+/** 敵とボスの配置の検査(数・種類ごとの数・平地・安全な区間・ボスの前後・別々の闘技場)。 */
+export function validatePlacements(stage: Stage): string[] {
+  const errors: string[] = [];
+  const START_SAFE = 600;
+  const SHORE_SAFE = 600;
+  const BOSS_MARGIN = 100;
+
+  // ボス: 10 体、別々の闘技場(往復範囲が重ならない)、左から右へ順に、前後 100 が平地
+  if (stage.bosses.length !== 10) errors.push(`ボスが 10 体ではない: ${stage.bosses.length}`);
+  for (const [i, b] of stage.bosses.entries()) {
+    const x0 = b.left - BOSS_MARGIN;
+    const x1 = b.right + BOSS_WIDTH + BOSS_MARGIN;
+    if (touchesFeature(stage, x0, x1)) errors.push(`ボス ${i} の前後に穴・崖・浮島がある: ${x0}〜${x1}`);
+    if (b.left < START_SAFE || x1 > SEA_X - SHORE_SAFE) errors.push(`ボス ${i} が安全な区間にいる`);
+    const prev = stage.bosses[i - 1];
+    if (prev && b.left <= prev.right + BOSS_WIDTH) errors.push(`ボス ${i} が前のボスの範囲と重なる、または順序が逆`);
+  }
+
+  // ザコ敵: 30 体以上、10 種類すべてが 3 体以上
+  if (stage.enemies.length < 30) errors.push(`ザコ敵が 30 体未満: ${stage.enemies.length}`);
+  for (const kind of ENEMY_KINDS) {
+    const n = stage.enemies.filter((e) => e.kind === kind).length;
+    if (n < 3) errors.push(`ザコ敵の種類 ${kind} が 3 体未満: ${n}`);
+  }
+  for (const [i, e] of stage.enemies.entries()) {
+    const x0 = e.left;
+    const x1 = e.right + ENEMY_SIZE;
+    if (touchesFeature(stage, x0, x1)) errors.push(`ザコ敵 ${i}(${e.kind}) の範囲に穴・崖・浮島がある: ${x0}〜${x1}`);
+    if (x0 < START_SAFE || x1 > SEA_X - SHORE_SAFE) errors.push(`ザコ敵 ${i}(${e.kind}) が安全な区間にいる`);
+    if (e.x < e.left || e.x > e.right) errors.push(`ザコ敵 ${i}(${e.kind}) の初期位置が範囲の外`);
+    for (const [j, b] of stage.bosses.entries()) {
+      if (overlapsRange(x0, x1, b.left - BOSS_MARGIN, b.right + BOSS_WIDTH + BOSS_MARGIN)) {
+        errors.push(`ザコ敵 ${i}(${e.kind}) がボス ${j} の範囲と重なる`);
+      }
+    }
+  }
   return errors;
 }
 

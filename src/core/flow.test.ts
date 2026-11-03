@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBoss } from './boss';
-import { FIXED_DT, PLAYER_WIDTH, SEA_X } from './config';
+import { FIXED_DT, PLAYER_WIDTH, RAFT_PARTS_REQUIRED, SEA_X } from './config';
 import { createFlow, stepFlow, type Flow } from './flow';
 import { createGame } from './game';
 import { NO_INPUT, type InputState } from './input';
@@ -20,9 +20,10 @@ function readyToEscape(): Flow {
   const game = {
     ...createGame(),
     raftComplete: true,
-    partsCollected: 1,
+    partsCollected: RAFT_PARTS_REQUIRED,
     player: createPlayer(SEA_X - 200),
-    boss: { ...createBoss(), alive: false, hp: 0 },
+    bosses: [{ ...createBoss(), alive: false, hp: 0 }],
+    enemies: [],
   };
   return { phase: 'playing', game, confirmHeld: false };
 }
@@ -95,9 +96,9 @@ describe('クリア', () => {
 
   it('プレイ中は世界が進行する(ボスが往復し、プレイヤーが動く)', () => {
     let f: Flow = { phase: 'playing', game: createGame(), confirmHeld: false };
-    const boss0 = f.game.boss.x;
+    const boss0 = f.game.bosses[0]!.x;
     f = run(f, RIGHT, 30);
-    expect(f.game.boss.x).not.toBe(boss0);
+    expect(f.game.bosses[0]!.x).not.toBe(boss0);
     expect(f.game.player.x).toBeGreaterThan(100);
   });
 
@@ -117,7 +118,7 @@ describe('再プレイ', () => {
     expect(f.game.partsCollected).toBe(0);
     expect(f.game.raftComplete).toBe(false);
     expect(f.game.escaped).toBe(false);
-    expect(f.game.boss.hp).toBe(3);
+    for (const b of f.game.bosses) expect(b.hp).toBe(b.maxHp);
     expect(f.game.parts).toEqual([]);
   });
 

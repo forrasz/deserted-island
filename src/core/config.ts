@@ -1,7 +1,7 @@
 /** 物理・画面の定数。単位は px と秒。 */
 export const VIEW_WIDTH = 960;
 export const VIEW_HEIGHT = 540;
-export const WORLD_WIDTH = 16800;
+export const WORLD_WIDTH = 25800;
 /** ステージの高さ(画面の高さの 3 倍)。 */
 export const WORLD_HEIGHT = 1620;
 /** 地面の上面(ステージの下端から 80 上)。ボスと部品の床にも使う。 */
@@ -45,7 +45,7 @@ export const PART_HEIGHT = 24;
 
 // --- イカダ・海・脱出 ---
 /** イカダの完成に必要な部品の数。 */
-export const RAFT_PARTS_REQUIRED = 1;
+export const RAFT_PARTS_REQUIRED = 10;
 /** 海の開始位置(ワールド x)。これより右が海で、イカダ完成前は入れない。 */
 export const SEA_X = WORLD_WIDTH - 240;
 
@@ -79,3 +79,57 @@ export const HIGH_RISE = 60;
 export const MAX_GAP_HIGH = 120;
 /** 歩ける面の頭上に必要な空間(px)。プレイヤーの身長 56 にジャンプの余裕を加えた値。 */
 export const HEADROOM = 100;
+
+// --- ザコ敵(行動の数値。specs/enemy-catalog に対応) ---
+/** ザコ敵の当たり判定の大きさ(幅・高さ)と体力。 */
+export const ENEMY_SIZE = 40;
+export const ENEMY_HP = 1;
+
+/** のろのろ・ちょこまか: 往復の速さ(px/s)。 */
+export const PLODDER_SPEED = 50;
+export const SCURRIER_SPEED = 150;
+
+/** ぴょんぴょん: 往復の速さ、ジャンプの間隔(秒)、ジャンプの初速(px/s、上向き)。 */
+export const HOPPER_SPEED = 70;
+export const HOPPER_INTERVAL = 1.2;
+export const HOPPER_JUMP_SPEED = 450;
+
+/** ねぼすけ: 突進を始める水平距離、突進の速さ、突進の時間(秒)、休む時間(秒)。 */
+export const SLEEPER_TRIGGER = 220;
+export const SLEEPER_DASH_SPEED = 220;
+export const SLEEPER_DASH_TIME = 0.8;
+export const SLEEPER_REST_TIME = 2;
+
+/** つきまとい: 追いかける水平距離、追いかける速さ、普段の往復の速さ。 */
+export const CHASER_RANGE = 320;
+export const CHASER_SPEED = 110;
+export const CHASER_PATROL_SPEED = 50;
+
+/** ふわふわ: 往復の速さ、地面からの高さ(敵の下辺)、上下の揺れの振幅(px)と周期(秒)。 */
+export const FLOATER_SPEED = 70;
+export const FLOATER_HEIGHT = 140;
+export const FLOATER_AMPLITUDE = 40;
+export const FLOATER_PERIOD = 2;
+
+/** きゅうこうか: 飛ぶ高さ(敵の下辺)、往復の速さ、急降下を始める水平距離、降下の速さ、降下の底の高さ、上昇の速さ。 */
+export const SWOOPER_HEIGHT = 220;
+export const SWOOPER_SPEED = 100;
+export const SWOOPER_TRIGGER = 60;
+export const SWOOPER_DIVE_SPEED = 600;
+export const SWOOPER_DIVE_BOTTOM = 20;
+export const SWOOPER_RISE_SPEED = 200;
+
+/** はねっこ: 往復の速さ、着地で跳ね返る初速(px/s、上向き)。 */
+export const BOUNCER_SPEED = 60;
+export const BOUNCER_BOUNCE_SPEED = 600;
+
+/** かくれんぼ: 往復の速さ、見えている時間と隠れている時間(秒)。 */
+export const HIDER_SPEED = 60;
+export const HIDER_VISIBLE_TIME = 2;
+export const HIDER_HIDDEN_TIME = 1.5;
+
+/** とっしん: 歩く速さと時間(秒)、突進の速さと時間(秒)。 */
+export const CHARGER_WALK_SPEED = 40;
+export const CHARGER_WALK_TIME = 2;
+export const CHARGER_DASH_SPEED = 320;
+export const CHARGER_DASH_TIME = 0.5;

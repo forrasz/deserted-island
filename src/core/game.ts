@@ -1,5 +1,8 @@
 import { bossRect, createBoss, damageBoss, stepBoss, type Boss } from './boss';
-import { overlapAmount, overlaps, type Rect } from './collision';
+import { overlapAmount, overlaps } from './collision';
+import { isStomp, playerRect } from './contact';
+import { createEnemy, stepEnemy, type Enemy } from './enemy';
+import { resolveEnemyContact } from './enemy-contact';
 import {
   BOSS_HEIGHT,
   BOSS_WIDTH,
@@ -15,7 +18,6 @@ import {
   RESPAWN_LOCK_TIME,
   SEA_X,
   STOMP_BOUNCE_SPEED,
-  STOMP_TOLERANCE,
 } from './config';
 import { NO_INPUT, type InputState } from './input';
 import {
@@ -26,11 +28,15 @@ import {
   type WorldBounds,
 } from './player';
 import { createPart, partRect, stepPart, type RaftPart } from './raft-part';
+import { STAGE, type Stage } from './stage';
 import { fallYOf, isFullySupported, platformsOf, solidsOf } from './terrain';
 
 export interface GameState {
   player: Player;
-  boss: Boss;
+  /** ボス(10 体)。順序はステージの闘技場の順。 */
+  bosses: Boss[];
+  /** ザコ敵(倒された敵も `alive: false` で残る)。 */
+  enemies: Enemy[];
   parts: RaftPart[];
   /** 拾得したイカダの部品の数。 */
   partsCollected: number;
@@ -50,11 +56,23 @@ export interface GameState {
   respawnLock: number;
 }
 
-export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
+/**
+ * 初期状態。ボスとザコ敵は、ステージの配置(placements)から作る。
+ * 既定はゲームのステージ。テストでは、敵なしのステージなどを渡せる。
+ */
+export function createGame(
+  world: WorldBounds = DEFAULT_WORLD,
+  placements: Pick<Stage, 'bosses' | 'enemies'> = STAGE,
+): GameState {
   const player = createPlayer(100, world);
   return {
     player,
-    boss: createBoss(undefined, undefined, undefined, world.groundY),
+    bosses: placements.bosses.map((b) =>
+      createBoss(b.x, b.left, b.right, world.groundY, b.def),
+    ),
+    enemies: placements.enemies.map((e, i) =>
+      createEnemy(e.kind, e.x, e.left, e.right, world.groundY, i),
+    ),
     parts: [],
     partsCollected: 0,
     raftComplete: false,
@@ -65,10 +83,6 @@ export function createGame(world: WorldBounds = DEFAULT_WORLD): GameState {
     respawn: { x: player.x, y: player.y },
     respawnLock: 0,
   };
-}
-
-function playerRect(p: Player): Rect {
-  return { x: p.x, y: p.y, w: PLAYER_WIDTH, h: PLAYER_HEIGHT };
 }
 
 /**
@@ -88,10 +102,7 @@ function resolveBossContact(
   const amount = overlapAmount(playerRect(player), bossRect(boss));
   if (!amount) return { player, boss, hit: false };
 
-  const prevBottom = prevPlayer.y + PLAYER_HEIGHT;
-  const isStomp = player.vy > 0 && prevBottom <= boss.y + STOMP_TOLERANCE;
-
-  if (isStomp) {
+  if (isStomp(prevPlayer.y, player.vy, boss.y)) {
     return {
       player: {
         ...player,
@@ -119,7 +130,7 @@ function resolveBossContact(
 
 /**
  * 1 回の固定ステップ分、ゲーム全体を更新する。
- * 順序: プレイヤー → ボス → 衝突解決(被弾・無敵) → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
+ * 順序: プレイヤー → ボス・ザコ敵 → 衝突解決(ボス → ザコ敵。被弾・無敵) → ドロップ → 部品の落下 → 拾得 → イカダ・海・脱出
  */
 export function stepGame(
   state: GameState,
@@ -154,27 +165,45 @@ export function stepGame(
     respawn = { x: movedPlayer.x, y: movedPlayer.y };
   }
 
-  const movedBoss = stepBoss(state.boss, dt);
+  // ボス(各体の往復・無敵時間)とザコ敵(各体の行動。プレイヤーの位置に反応する敵がいる)
+  const movedBosses = state.bosses.map((b) => stepBoss(b, dt));
+  const ctx = { playerX: movedPlayer.x + PLAYER_WIDTH / 2, playerY: movedPlayer.y, groundY: world.groundY };
+  const movedEnemies = state.enemies.map((e) => stepEnemy(e, ctx, dt));
 
   // 無敵時間は更新の冒頭で減らす(被弾した更新では PLAYER_INVULN_TIME のまま、次の更新から減る)
   const invulnLeft = fell ? PLAYER_INVULN_TIME : Math.max(0, state.hitInvuln - dt);
-  const resolved = resolveBossContact(prevPlayer, movedPlayer, movedBoss, world, invulnLeft > 0);
-  const player = resolved.player;
-  const boss = resolved.boss;
-  const hp = Math.max(0, state.hp - (fell ? 1 : 0) - (resolved.hit ? 1 : 0));
-  const hitInvuln = resolved.hit ? PLAYER_INVULN_TIME : invulnLeft;
+  const invulnerable = invulnLeft > 0;
 
-  // 撃破された更新でのみ、ボス中央に部品を 1 個ドロップする
+  // ボスとの衝突(各体に順に適用)→ ザコ敵との衝突。被弾は 1 更新に 1 回
+  let player = movedPlayer;
+  let bossHit = false;
+  const bosses = movedBosses.map((b) => {
+    const r = resolveBossContact(prevPlayer, player, b, world, invulnerable);
+    player = r.player;
+    bossHit = bossHit || r.hit;
+    return r.boss;
+  });
+  const enemyResult = resolveEnemyContact(prevPlayer, player, movedEnemies, invulnerable);
+  player = enemyResult.player;
+  const enemies = enemyResult.enemies;
+  const hit = bossHit || enemyResult.hit;
+
+  const hp = Math.max(0, state.hp - (fell ? 1 : 0) - (hit ? 1 : 0));
+  const hitInvuln = hit ? PLAYER_INVULN_TIME : invulnLeft;
+
+  // 撃破された更新でのみ、そのボスの中央に部品を 1 個ドロップする(ボス 1 体につき 1 個)
   let parts = state.parts;
-  if (state.boss.alive && !boss.alive) {
-    parts = [
-      ...parts,
-      createPart(
-        boss.x + BOSS_WIDTH / 2 - PART_WIDTH / 2,
-        boss.y + BOSS_HEIGHT / 2 - PART_HEIGHT / 2,
-      ),
-    ];
-  }
+  bosses.forEach((boss, i) => {
+    if (state.bosses[i]!.alive && !boss.alive) {
+      parts = [
+        ...parts,
+        createPart(
+          boss.x + BOSS_WIDTH / 2 - PART_WIDTH / 2,
+          boss.y + BOSS_HEIGHT / 2 - PART_HEIGHT / 2,
+        ),
+      ];
+    }
+  });
 
   parts = parts.map((p) => stepPart(p, dt, world.groundY));
 
@@ -197,7 +226,8 @@ export function stepGame(
 
   return {
     player: finalPlayer,
-    boss,
+    bosses,
+    enemies,
     parts: remaining,
     partsCollected,
     raftComplete,

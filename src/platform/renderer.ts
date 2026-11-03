@@ -2,10 +2,11 @@ import { worldToScreen, worldToScreenY } from '../core/camera';
 import type { Rect } from '../core/collision';
 import {
   BOSS_HEIGHT,
-  BOSS_MAX_HP,
   BOSS_WIDTH,
+  ENEMY_SIZE,
   PARALLAX_FACTOR,
   PLAYER_MAX_HP,
+  RAFT_PARTS_REQUIRED,
   PART_HEIGHT,
   PART_WIDTH,
   GROUND_Y,
@@ -20,6 +21,8 @@ import {
   WORLD_HEIGHT,
 } from '../core/config';
 import { blinkVisible } from '../core/blink';
+import type { Enemy } from '../core/enemy';
+import { ENEMY_DEFS } from '../core/enemy-defs';
 import { nextFacing, type Facing } from '../core/facing';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
@@ -31,7 +34,8 @@ const MARKER_INTERVAL = 160;
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private playerFacing: Facing = 1;
-  private bossFacing: Facing = 1;
+  /** ボスごとの向き(停止中は直前の向きを保つ)。 */
+  private readonly bossFacings = new Map<number, Facing>();
   /** 描画中のカメラ y(ワールド y を画面 y に変換するのに使う)。 */
   private cameraY = 0;
 
@@ -56,7 +60,7 @@ export class Renderer {
   draw(flow: Flow, cameraX: number, cameraY: number = WORLD_HEIGHT - VIEW_HEIGHT): void {
     const { ctx } = this;
     this.cameraY = cameraY;
-    const { player, boss, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
+    const { player, bosses, enemies, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
 
     // 背景(素材があれば視差つきで横に繰り返す。なければ空色)
     this.drawBackground(cameraX);
@@ -72,19 +76,25 @@ export class Renderer {
     // 完成したイカダ(砂浜の端)
     if (raftComplete) this.drawRaft(cameraX);
 
-    // ボス「カクレモモジリ」(素材があれば画像、なければ緑の四角形。頭上に残り体力バー)
-    if (boss.alive) {
-      this.bossFacing = nextFacing(this.bossFacing, boss.vx);
+    // ザコ敵(種類ごとの色と目印の図形。倒された敵・隠れている敵・画面外の敵は描かない)
+    for (const e of enemies) this.drawEnemy(e, cameraX);
+
+    // ボス「カクレモモジリ」10 体(素材があれば画像、なければ緑の四角形。頭上に残り体力バー)
+    for (const boss of bosses) {
+      if (!boss.alive) continue;
       const bx = worldToScreen(boss.x, cameraX);
+      if (bx + BOSS_WIDTH < 0 || bx > VIEW_WIDTH) continue;
+      const facing = nextFacing(this.bossFacings.get(boss.id) ?? 1, boss.vx);
+      this.bossFacings.set(boss.id, facing);
       const bossImg = this.assets.get('boss');
       if (bossImg) {
-        this.drawSprite(bossImg, { x: bx, y: this.sy(boss.y), w: BOSS_WIDTH, h: BOSS_HEIGHT }, this.bossFacing);
+        this.drawSprite(bossImg, { x: bx, y: this.sy(boss.y), w: BOSS_WIDTH, h: BOSS_HEIGHT }, facing);
       } else {
         ctx.fillStyle = '#2e8b57';
         ctx.fillRect(bx, this.sy(boss.y), BOSS_WIDTH, BOSS_HEIGHT);
       }
-      const seg = BOSS_WIDTH / BOSS_MAX_HP;
-      for (let i = 0; i < BOSS_MAX_HP; i++) {
+      const seg = BOSS_WIDTH / boss.maxHp;
+      for (let i = 0; i < boss.maxHp; i++) {
         ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
         ctx.fillRect(bx + i * seg + 1, this.sy(boss.y) - 12, seg - 2, 8);
       }
@@ -126,7 +136,7 @@ export class Renderer {
 
     // HUD(画面座標の固定位置。カメラの影響を受けない)
     this.drawHp(hp);
-    this.text(`イカダの部品: ${partsCollected}`, 16, 44, 24, 'left');
+    this.text(`イカダの部品: ${partsCollected}/${RAFT_PARTS_REQUIRED}`, 16, 44, 24, 'left');
     this.text(
       raftComplete ? 'イカダ: 完成! 右の海へ向かおう' : 'イカダ: 未完成',
       16,
@@ -245,6 +255,71 @@ export class Renderer {
       for (let x = seaScreenX + 12; x < VIEW_WIDTH; x += 48) {
         ctx.fillRect(x, y, 24, 3);
       }
+    }
+  }
+
+  /** ザコ敵を図形で描く。本体の色は種類ごとに異なり、目と、種類ごとの目印を付ける。 */
+  private drawEnemy(e: Enemy, cameraX: number): void {
+    if (!e.alive || e.hidden) return;
+    const x = worldToScreen(e.x, cameraX);
+    const y = this.sy(e.y);
+    if (x + ENEMY_SIZE < 0 || x > VIEW_WIDTH || y > VIEW_HEIGHT || y + ENEMY_SIZE < 0) return;
+    const def = ENEMY_DEFS[e.kind];
+    const { ctx } = this;
+
+    // 本体
+    ctx.fillStyle = def.color;
+    ctx.fillRect(x, y, ENEMY_SIZE, ENEMY_SIZE);
+
+    // 種類ごとの目印
+    ctx.fillStyle = def.accent;
+    switch (e.kind) {
+      case 'scurrier': // 速さを表す横線
+        ctx.fillRect(x - 6, y + 12, 6, 3);
+        ctx.fillRect(x - 10, y + 22, 10, 3);
+        break;
+      case 'hopper': // ばね(下の脚)
+        ctx.fillRect(x + 6, y + ENEMY_SIZE - 6, 8, 6);
+        ctx.fillRect(x + ENEMY_SIZE - 14, y + ENEMY_SIZE - 6, 8, 6);
+        break;
+      case 'chaser': // とがった眉
+        ctx.fillRect(x + 4, y + 4, 14, 3);
+        ctx.fillRect(x + ENEMY_SIZE - 18, y + 4, 14, 3);
+        break;
+      case 'floater': // 上の輪(浮いている印)
+        ctx.fillRect(x + 8, y - 6, ENEMY_SIZE - 16, 4);
+        break;
+      case 'swooper': // 翼
+        ctx.fillRect(x - 8, y + 10, 8, 14);
+        ctx.fillRect(x + ENEMY_SIZE, y + 10, 8, 14);
+        break;
+      case 'bouncer': // 横じま
+        ctx.fillRect(x, y + 24, ENEMY_SIZE, 4);
+        ctx.fillRect(x, y + 32, ENEMY_SIZE, 4);
+        break;
+      case 'hider': // 点線(消える印)
+        for (let i = 0; i < 4; i++) ctx.fillRect(x + 2 + i * 10, y + ENEMY_SIZE - 5, 6, 3);
+        break;
+      case 'charger': // 角
+        ctx.fillRect(x + 6, y - 8, 6, 8);
+        ctx.fillRect(x + ENEMY_SIZE - 12, y - 8, 6, 8);
+        break;
+      case 'sleeper': // 眠っている間は目を閉じる(下の線)。突進中は目が開く
+        if (e.phase !== 'dash') ctx.fillRect(x + 6, y + 18, ENEMY_SIZE - 12, 3);
+        break;
+      default:
+        break;
+    }
+
+    // 目(進む向きに少し寄せる)。ねぼすけは眠っている間は描かない
+    if (!(e.kind === 'sleeper' && e.phase !== 'dash')) {
+      const shift = e.dir === 1 ? 3 : -3;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x + 8 + shift, y + 10, 8, 10);
+      ctx.fillRect(x + ENEMY_SIZE - 16 + shift, y + 10, 8, 10);
+      ctx.fillStyle = '#111111';
+      ctx.fillRect(x + 11 + shift + (e.dir === 1 ? 2 : 0), y + 13, 4, 5);
+      ctx.fillRect(x + ENEMY_SIZE - 13 + shift + (e.dir === 1 ? 2 : 0), y + 13, 4, 5);
     }
   }
 

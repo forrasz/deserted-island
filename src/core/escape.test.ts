@@ -20,7 +20,8 @@ const RIGHT_JUMP: InputState = { ...NO_INPUT, right: true, jump: true };
 function base(over: Partial<GameState> = {}): GameState {
   return {
     ...createGame(),
-    boss: { ...createBoss(), alive: false, hp: 0 },
+    bosses: [{ ...createBoss(), alive: false, hp: 0 }],
+    enemies: [],
     ...over,
   };
 }
@@ -46,16 +47,29 @@ describe('イカダの完成', () => {
     expect(run(base(), NO_INPUT, 120).raftComplete).toBe(false);
   });
 
-  it('必要数(1 個)を拾った同じ更新でイカダが完成する', () => {
+  it('あと 1 個足りない(所持数 9)間は、更新を重ねても未完成のまま', () => {
+    const g = run(base({ partsCollected: RAFT_PARTS_REQUIRED - 1 }), NO_INPUT, 120);
+    expect(g.raftComplete).toBe(false);
+  });
+
+  it('必要数(10 個)をそろえる 1 個を拾った同じ更新でイカダが完成する', () => {
     const player = createPlayer(500);
-    const g = stepGame(base({ player, parts: [groundedPart(510)] }), NO_INPUT, FIXED_DT);
+    const g = stepGame(
+      base({ player, parts: [groundedPart(510)], partsCollected: RAFT_PARTS_REQUIRED - 1 }),
+      NO_INPUT,
+      FIXED_DT,
+    );
     expect(g.partsCollected).toBe(RAFT_PARTS_REQUIRED);
     expect(g.raftComplete).toBe(true);
   });
 
   it('完成後は更新を重ねても完成状態のまま', () => {
     const player = createPlayer(500);
-    let g = stepGame(base({ player, parts: [groundedPart(510)] }), NO_INPUT, FIXED_DT);
+    let g = stepGame(
+      base({ player, parts: [groundedPart(510)], partsCollected: RAFT_PARTS_REQUIRED - 1 }),
+      NO_INPUT,
+      FIXED_DT,
+    );
     g = run(g, NO_INPUT, 300);
     expect(g.raftComplete).toBe(true);
   });
@@ -93,24 +107,24 @@ describe('イカダ未完成時は海へ入れない', () => {
 
 describe('イカダ完成後の脱出', () => {
   it('完成していて海に達すると脱出が成立する', () => {
-    const g = run(base({ player: createPlayer(SEA_X - 200), raftComplete: true, partsCollected: 1 }), RIGHT, 300);
+    const g = run(base({ player: createPlayer(SEA_X - 200), raftComplete: true, partsCollected: RAFT_PARTS_REQUIRED }), RIGHT, 300);
     expect(g.escaped).toBe(true);
   });
 
   it('完成していても、海の手前にいる間は脱出しない', () => {
-    const g = run(base({ player: createPlayer(500), raftComplete: true, partsCollected: 1 }), NO_INPUT, 60);
+    const g = run(base({ player: createPlayer(500), raftComplete: true, partsCollected: RAFT_PARTS_REQUIRED }), NO_INPUT, 60);
     expect(g.escaped).toBe(false);
   });
 
   it('完成後は海の領域へ入れる(右辺が海の開始位置に達する)', () => {
-    const g = run(base({ player: createPlayer(SEA_X - 200), raftComplete: true, partsCollected: 1 }), RIGHT, 300);
+    const g = run(base({ player: createPlayer(SEA_X - 200), raftComplete: true, partsCollected: RAFT_PARTS_REQUIRED }), RIGHT, 300);
     expect(g.player.x + PLAYER_WIDTH).toBeGreaterThanOrEqual(SEA_X);
   });
 
   it('海に接しているときに部品を拾うと、遅くとも次の更新までに脱出が成立する', () => {
     const player = createPlayer(SEA_X - PLAYER_WIDTH);
     const part = groundedPart(player.x + 5);
-    let g = base({ player, parts: [part] });
+    let g = base({ player, parts: [part], partsCollected: RAFT_PARTS_REQUIRED - 1 });
     g = stepGame(g, RIGHT, FIXED_DT);
     g = stepGame(g, RIGHT, FIXED_DT);
     expect(g.raftComplete).toBe(true);
@@ -118,7 +132,7 @@ describe('イカダ完成後の脱出', () => {
   });
 
   it('一度脱出したら、後の更新で取り消されない', () => {
-    let g = run(base({ player: createPlayer(SEA_X - 200), raftComplete: true, partsCollected: 1 }), RIGHT, 300);
+    let g = run(base({ player: createPlayer(SEA_X - 200), raftComplete: true, partsCollected: RAFT_PARTS_REQUIRED }), RIGHT, 300);
     g = run(g, NO_INPUT, 60);
     expect(g.escaped).toBe(true);
   });

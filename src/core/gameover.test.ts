@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBoss, type Boss } from './boss';
-import { FIXED_DT, PLAYER_MAX_HP, PLAYER_WIDTH, SEA_X } from './config';
+import { FIXED_DT, PLAYER_MAX_HP, PLAYER_WIDTH, RAFT_PARTS_REQUIRED, SEA_X } from './config';
 import { createFlow, stepFlow, type Flow } from './flow';
 import { createGame, type GameState } from './game';
 import { NO_INPUT, type InputState } from './input';
@@ -20,7 +20,7 @@ function playing(game: Partial<GameState>, confirmHeld = false): Flow {
 /** ボスの左側から接触して被弾する状態(HPを指定)。 */
 function aboutToBeHit(hp: number): Flow {
   const boss = stillBoss();
-  return playing({ boss, player: createPlayer(boss.x - PLAYER_WIDTH + 10), hp });
+  return playing({ bosses: [boss], enemies: [], player: createPlayer(boss.x - PLAYER_WIDTH + 10), hp });
 }
 
 function run(f: Flow, input: InputState, n: number): Flow {
@@ -41,9 +41,10 @@ function cleared(): Flow {
   const f = run(
     playing({
       raftComplete: true,
-      partsCollected: 1,
+      partsCollected: RAFT_PARTS_REQUIRED,
       player: createPlayer(SEA_X - 200),
-      boss: stillBoss(1000, { alive: false, hp: 0 }),
+      bosses: [stillBoss(1000, { alive: false, hp: 0 })],
+      enemies: [],
     }),
     RIGHT,
     300,
@@ -84,11 +85,12 @@ describe('ゲームオーバーへの遷移', () => {
     const boss = stillBoss(SEA_X - 60);
     const f = stepFlow(
       playing({
-        boss,
+        bosses: [boss],
+        enemies: [],
         player: createPlayer(SEA_X),
         hp: 1,
         raftComplete: true,
-        partsCollected: 1,
+        partsCollected: RAFT_PARTS_REQUIRED,
       }),
       NO_INPUT,
       FIXED_DT,
@@ -126,7 +128,7 @@ describe('ゲームオーバー画面', () => {
     expect(f.game.dead).toBe(false);
     expect(f.game.partsCollected).toBe(0);
     expect(f.game.raftComplete).toBe(false);
-    expect(f.game.boss.hp).toBe(3);
+    for (const b of f.game.bosses) expect(b.hp).toBe(b.maxHp);
     expect(f.game.parts).toEqual([]);
   });
 
