@@ -41,3 +41,11 @@ export const PART_HEIGHT = 24;
 export const RAFT_PARTS_REQUIRED = 1;
 /** 海の開始位置(ワールド x)。これより右が海で、イカダ完成前は入れない。 */
 export const SEA_X = 3600;
+
+// --- 画像素材の描画 ---
+/** 背景の視差。カメラの移動量に対する背景の移動量の割合。 */
+export const PARALLAX_FACTOR = 0.2;
+/** 完成したイカダの画像の描画枠(px)。右端は海の開始位置の手前 RAFT_SPRITE_MARGIN。 */
+export const RAFT_SPRITE_WIDTH = 160;
+export const RAFT_SPRITE_HEIGHT = 48;
+export const RAFT_SPRITE_MARGIN = 20;
