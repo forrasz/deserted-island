@@ -2,16 +2,99 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>無人島脱出</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #111; }
-      body { display: flex; align-items: center; justify-content: center; }
-      canvas { max-width: 100vw; max-height: 100vh; aspect-ratio: 16 / 9; background: #87ceeb; }
+      :root {
+        --safe-t: env(safe-area-inset-top, 0px);
+        --safe-r: env(safe-area-inset-right, 0px);
+        --safe-b: env(safe-area-inset-bottom, 0px);
+        --safe-l: env(safe-area-inset-left, 0px);
+      }
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        height: 100dvh;
+        box-sizing: border-box;
+        padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* 16:9 を保ったまま、安全領域の内側いっぱいに収める */
+      canvas {
+        width: min(100%, calc((100dvh - var(--safe-t) - var(--safe-b)) * 16 / 9));
+        aspect-ratio: 16 / 9;
+        background: #87ceeb;
+      }
+
+      /* 操作ボタン: タッチ操作の端末でだけ表示する */
+      #touch-controls { display: none; }
+      @media (pointer: coarse) {
+        #touch-controls { display: block; }
+      }
+      #touch-controls button {
+        position: fixed;
+        bottom: calc(var(--safe-b) + 16px);
+        width: 72px;
+        height: 72px;
+        padding: 0;
+        border: 2px solid rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.35);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 28px;
+        font-family: sans-serif;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+      #touch-controls button:active { background: rgba(255, 255, 255, 0.35); }
+      #touch-controls [data-btn="left"] { left: calc(var(--safe-l) + 16px); }
+      #touch-controls [data-btn="right"] { left: calc(var(--safe-l) + 104px); }
+      #touch-controls [data-btn="jump"] {
+        right: calc(var(--safe-r) + 16px);
+        width: 88px;
+        height: 88px;
+        font-size: 20px;
+      }
+
+      /* 縦向きの案内 */
+      #rotate-notice {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: #000;
+        color: #fff;
+        font-family: sans-serif;
+        font-size: 20px;
+        text-align: center;
+        align-items: center;
+        justify-content: center;
+      }
+      #rotate-notice.show { display: flex; }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
+    <div id="touch-controls">
+      <button type="button" data-btn="left" aria-label="左">◀</button>
+      <button type="button" data-btn="right" aria-label="右">▶</button>
+      <button type="button" data-btn="jump" aria-label="ジャンプ">ジャンプ</button>
+    </div>
+    <div id="rotate-notice">スマホを横向きにしてください</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

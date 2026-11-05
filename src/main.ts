@@ -2,9 +2,11 @@ import { computeCameraX, computeCameraY } from './core/camera';
 import { FIXED_DT, PLAYER_HEIGHT, PLAYER_WIDTH } from './core/config';
 import { createFlow, stepFlow } from './core/flow';
 import { FixedStepper } from './core/loop';
+import { isPortrait, mergeInput } from './core/touch';
 import { loadAssets } from './platform/assets';
 import { Keyboard } from './platform/keyboard';
 import { Renderer } from './platform/renderer';
+import { TouchControls } from './platform/touch';
 
 const canvas = document.getElementById('game');
 if (!(canvas instanceof HTMLCanvasElement)) throw new Error('#game canvas が見つかりません');
@@ -15,6 +17,10 @@ async function start(canvas: HTMLCanvasElement): Promise<void> {
 
   const keyboard = new Keyboard();
   keyboard.attach(window);
+  const touch = new TouchControls();
+  const controls = document.getElementById('touch-controls');
+  if (controls) touch.attach(controls, window);
+  const notice = document.getElementById('rotate-notice');
   const renderer = new Renderer(canvas, assets);
   window.addEventListener('resize', () => renderer.resize());
 
@@ -23,11 +29,23 @@ async function start(canvas: HTMLCanvasElement): Promise<void> {
   let last = performance.now();
 
   function frame(now: number): void {
+    // 縦向きの間は案内を出してゲームを止める(止めた時間は、横向きに戻ったあとに消化しない)
+    const portrait = isPortrait(window.innerWidth, window.innerHeight);
+    notice?.classList.toggle('show', portrait);
+    if (portrait) {
+      touch.reset();
+      last = now;
+      requestAnimationFrame(frame);
+      return;
+    }
+
     const steps = stepper.advance(now - last);
     last = now;
 
+    touch.setConfirmEnabled(flow.phase !== 'playing');
     for (let i = 0; i < steps; i++) {
-      flow = stepFlow(flow, keyboard.snapshot(), FIXED_DT);
+      flow = stepFlow(flow, mergeInput(keyboard.snapshot(), touch.snapshot()), FIXED_DT);
+      touch.setConfirmEnabled(flow.phase !== 'playing');
     }
 
     const { player } = flow.game;
