@@ -8,6 +8,7 @@ import {
   BOSS_TRANSFORM_TIME,
   FIXED_DT,
   GROUND_Y,
+  NUSHI_RECOVER_TIME,
   PLAYER_HEIGHT,
   STOMP_BOUNCE_SPEED,
   PLAYER_MAX_HP,
@@ -75,10 +76,18 @@ describe('ヌシ: 通常形態の流れ(5.1)', () => {
     }
   });
 
-  it('突進のあと 1.0 秒休み、その間は動かず、踏める', () => {
+  it('突進のあと 1.0 秒休み、その間は動かない(気絶していないので、踏んでもダメージはない)', () => {
     const t = trace(nushi(), ticks(1.2 + 0.8 + 1.0) + 4, ctxAt(7000));
     expect(action(t.boss)).toBe('rest');
-    expect(bossFlags(t.boss)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: true });
+    expect(bossFlags(t.boss)).toEqual({
+      hidden: false,
+      stompImmune: false,
+      harmless: false,
+      telegraph: false,
+      crouch: false,
+      staggered: false,
+      bounceOnly: true,
+    });
     const x = t.boss.x;
     expect(trace(t.boss, ticks(1.0) - 5, ctxAt(7000)).boss.x).toBe(x);
   });
@@ -171,7 +180,7 @@ describe('ヌシ: 形態変化(5.2)', () => {
     const s: GameState = {
       ...createGame(undefined, { bosses: [], enemies: [] }),
       bosses: [b],
-      player: { x: 1090, y: b.y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
     const g = stepGame(s, NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.transformT).toBeGreaterThan(0);
@@ -180,18 +189,19 @@ describe('ヌシ: 形態変化(5.2)', () => {
     expect(g.hp).toBe(PLAYER_MAX_HP); // 被弾もしない
   });
 
-  it('体力が 7 から、踏みつけで 6 になったら、次の更新で変身に入る', () => {
-    const b = nushi({ hp: 7 }, 1000, 1000, 1000);
+  it('体力が 8 の気絶中に踏むと、体力が 4(6 以下)になり、次の更新で変身に入る', () => {
+    const b = nushi({ hp: 8, stagger: 6 }, 1000, 1000, 1000);
     const base = createGame(undefined, { bosses: [], enemies: [] });
     let g: GameState = {
       ...base,
       bosses: [b],
-      player: { x: 1090, y: b.y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(6);
+    expect(g.bosses[0]!.hp).toBe(4);
     g = stepGame({ ...g, player: { ...g.player, x: 5000, y: GROUND_Y - H } }, NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.transformT).toBeGreaterThan(0);
+    expect(g.bosses[0]!.stagger).toBe(0); // 変身に入るので、気絶は解ける
   });
 });
 
@@ -262,11 +272,11 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
   }
 
   it('撃破で、中央に部品を 1 個ドロップする(ゲーム内)', () => {
-    const b = { ...nushi({ hp: 1, transformed: true, form: 2 }, 1000, 1000, 1000) };
+    const b = { ...nushi({ hp: 1, transformed: true, form: 2, stagger: 6 }, 1000, 1000, 1000) };
     let g: GameState = {
       ...createGame(undefined, none),
       bosses: [b],
-      player: { x: 1090, y: b.y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.alive).toBe(false);
@@ -275,13 +285,13 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
   });
 
   it('撃破後も、すでに飛んでいる弾は、通常の消滅の条件で消える(新しい弾は出ない)', () => {
-    const b = { ...nushi({ hp: 1, transformed: true, form: 2 }, 1000, 1000, 1000) };
+    const b = { ...nushi({ hp: 1, transformed: true, form: 2, stagger: 6 }, 1000, 1000, 1000) };
     const wave = createWave(3000, GROUND_Y, 0);
     let g: GameState = {
       ...createGame(undefined, none),
       bosses: [b],
       projectiles: [wave],
-      player: { x: 1090, y: b.y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.alive).toBe(false);
@@ -303,7 +313,7 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
   });
 });
 
-describe('ヌシ: 休みの間は身をかがめて、ジャンプで踏める高さになる', () => {
+describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める高さになる', () => {
   const JUMP_APEX = (750 * 750) / (2 * 2000); // プレイヤーのジャンプの最高点(約 140)
 
   it('立っている間の高さは 250 で、ジャンプの最高点より高く、地面からのジャンプでは踏めない', () => {
@@ -312,69 +322,100 @@ describe('ヌシ: 休みの間は身をかがめて、ジャンプで踏める�
     expect(JUMP_APEX).toBeLessThan(250);
   });
 
-  it('休んでいる間は、高さが 100 になり、下辺は地面のまま、上辺はジャンプの最高点より低い', () => {
+  it('休んでいる間も、かがまない(高さ 250 のまま)', () => {
     const t = trace(nushi(), ticks(1.2 + 0.8 + 1.0) + 4, ctxAt(7000));
     expect(action(t.boss)).toBe('rest');
-    const r = bossRect(t.boss);
+    expect(bossRect(t.boss).h).toBe(250);
+    expect(bossFlags(t.boss).crouch).toBe(false);
+  });
+
+  it('気絶している間は、高さが 100 になり、下辺は地面のまま、上辺はジャンプの最高点より低い', () => {
+    const r = bossRect(nushi({ stagger: 6 }));
     expect(r.h).toBe(100);
     expect(r.y + r.h).toBe(GROUND_Y);
     expect(GROUND_Y - r.y).toBeLessThan(JUMP_APEX);
+    expect(bossFlags(nushi({ stagger: 6 })).crouch).toBe(true);
   });
 
-  it('休みが終わると、高さは 250 に戻る', () => {
-    const t = trace(nushi(), ticks(1.2 + 0.8 + 1.0 + 1.0) + 6, ctxAt(7000));
-    expect(action(t.boss)).not.toBe('rest');
+  it('気絶から回復すると、高さは 250 に戻る', () => {
+    const t = trace(nushi({ stagger: 0.1 }), 10);
+    expect(t.boss.stagger).toBe(0);
     expect(bossRect(t.boss).h).toBe(250);
   });
 
-  it('変身中・撃破されたボスなど、休み以外では、かがまない', () => {
-    expect(bossRect({ ...nushi({ hp: 6 }), transformT: 1 }).h).toBe(250);
-    expect(bossFlags(nushi()).crouch).toBe(false);
-  });
-
-  it('通常ボスは、休んでもかがまない(高さ 100 のまま)', () => {
+  it('通常ボスは、かがまない(高さ 100 のまま)', () => {
     const b = createBoss(1000, 0, 5000, GROUND_Y, BOSS_DEFS[2]!);
     expect(bossRect(b)).toEqual({ x: 1000, y: GROUND_Y - 100, w: 80, h: 100 });
     expect(b.restH).toBeUndefined();
   });
 
-  it('ゲーム内: 休んでいる間は、ジャンプの最高点付近から落ちて、踏める(体力が 1 減り、跳ね返る)', () => {
-    const resting = nushi({ step: 3, t: 0 }, 1000, 1000, 1000); // step 3 = rest
-    expect(action(resting)).toBe('rest');
-    const r = bossRect(resting);
-    const falling: Player = { x: 1090, y: r.y - H - 5, vx: 0, vy: 300, onGround: false };
-    const s: GameState = {
+  const stompState = (b: Boss, gap = 5): GameState => {
+    const r = bossRect(b);
+    return {
       ...createGame(undefined, { bosses: [], enemies: [] }),
-      bosses: [resting],
-      player: { ...falling },
+      bosses: [b],
+      player: { x: b.x + 90, y: r.y - H - gap, vx: 0, vy: 300, onGround: false },
     };
-    const g = stepGame(s, NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(11);
+  };
+
+  it('ゲーム内: 気絶中は、ジャンプの最高点付近から落ちて、踏める(体力が 4 減り、跳ね返り、短い起き上がりのあと気絶が解ける)', () => {
+    const g = stepGame(stompState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(8);
+    expect(g.bosses[0]!.stagger).toBe(NUSHI_RECOVER_TIME);
     expect(g.player.vy).toBe(-STOMP_BOUNCE_SPEED);
   });
 
-  it('ゲーム内: 立っている間(往復)は、同じ高さから落ちても、上辺に届かず、踏めない(側面として扱われる)', () => {
-    const standing = nushi({}, 1000, 1000, 1000); // step 0 = patrol
-    expect(action(standing)).toBe('patrol');
-    const falling: Player = { x: 1090, y: GROUND_Y - 100 - H - 20, vx: 0, vy: 300, onGround: false };
+  it('ゲーム内: 気絶中は、触れても被弾せず、押し戻されない', () => {
+    const b = nushi({ stagger: 6 }, 1000, 1000, 1000);
     const s: GameState = {
       ...createGame(undefined, { bosses: [], enemies: [] }),
-      bosses: [standing],
-      player: falling,
+      bosses: [b],
+      player: { x: b.x - 30, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
     };
     const g = stepGame(s, NO_INPUT, FIXED_DT);
+    expect(g.hp).toBe(PLAYER_MAX_HP);
+    expect(g.player.x).toBe(b.x - 30);
+  });
+
+  it('ゲーム内: 3 回の気絶中の踏みつけで、体力 12 のヌシが倒れる', () => {
+    let b = nushi({ stagger: 6 }, 1000, 1000, 1000);
+    for (const hp of [8, 4, 0]) {
+      const later = b.hp <= 6 ? { transformed: true, form: 2 as const, transformT: 0 } : {};
+      const g = stepGame(stompState({ ...b, stagger: 6, invuln: 0, ...later }), NO_INPUT, FIXED_DT);
+      expect(g.bosses[0]!.hp).toBe(hp);
+      b = g.bosses[0]!;
+    }
+    expect(b.alive).toBe(false);
+  });
+
+  it('ゲーム内: 気絶していない(休みでも)ヌシは、同じように踏んでも体力は減らず、跳ね返るだけ', () => {
+    const resting = nushi({ step: 3, t: 0 }, 1000, 1000, 1000); // step 3 = rest
+    expect(action(resting)).toBe('rest');
+    const g = stepGame(stompState(resting, 40), NO_INPUT, FIXED_DT);
+    // 高さ 250 の上辺へ落ちる(休みではかがまない)
+    const top = stompState(resting);
+    top.player = { ...top.player, y: resting.y - H - 5 };
+    const g2 = stepGame(top, NO_INPUT, FIXED_DT);
+    expect(g2.bosses[0]!.hp).toBe(12);
+    expect(g2.player.vy).toBe(-STOMP_BOUNCE_SPEED);
+    expect(g2.hp).toBe(PLAYER_MAX_HP);
     expect(g.bosses[0]!.hp).toBe(12);
   });
 
-  it('撃破時の部品は、かがんだ矩形の中央にドロップする', () => {
-    const resting = nushi({ step: 3, t: 0, hp: 1 }, 1000, 1000, 1000);
-    const r = bossRect(resting);
+  it('ゲーム内: 気絶していないヌシに横から触れると、被弾する', () => {
+    const b = nushi({}, 1000, 1000, 1000);
     const s: GameState = {
       ...createGame(undefined, { bosses: [], enemies: [] }),
-      bosses: [{ ...resting, transformed: true, form: 2, script: NUSHI_FORM2, step: 5 }],
-      player: { x: 1090, y: r.y - H - 5, vx: 0, vy: 300, onGround: false },
+      bosses: [b],
+      player: { x: b.x - 30, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
     };
     const g = stepGame(s, NO_INPUT, FIXED_DT);
+    expect(g.hp).toBe(PLAYER_MAX_HP - 1);
+  });
+
+  it('撃破時の部品は、かがんだ矩形の中央にドロップする', () => {
+    const b = nushi({ stagger: 6, hp: 1, transformed: true, form: 2 }, 1000, 1000, 1000);
+    const g = stepGame(stompState(b), NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);
   });

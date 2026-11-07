@@ -32,6 +32,7 @@ import { bossFlags } from '../core/boss-scripts';
 import type { Enemy } from '../core/enemy';
 import { ENEMY_DEFS } from '../core/enemy-defs';
 import { nextFacing, type Facing } from '../core/facing';
+import type { Pillar } from '../core/pillar';
 import type { Projectile } from '../core/projectile';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
@@ -87,6 +88,9 @@ export class Renderer {
 
     // 崖と浮島(図形)
     this.drawTerrain(cameraX);
+
+    // 最終ボスの闘技場の柱(壊れている間は描かない)
+    for (const pillar of flow.game.pillars) if (pillar.alive) this.drawPillar(pillar, cameraX);
 
     // 完成したイカダ(砂浜の端)
     if (raftComplete) this.drawRaft(cameraX);
@@ -429,12 +433,46 @@ export class Renderer {
       }
     }
 
+    // 気絶している間は、頭上で星が回る
+    if (flags.staggered) {
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffd740';
+      for (let i = 0; i < 3; i++) {
+        const a = boss.stagger * 5 + (i * Math.PI * 2) / 3;
+        ctx.fillText('★', bx + boss.w / 2 + Math.cos(a) * 50, top - 58 + Math.sin(a) * 10);
+      }
+    }
+
     // 残り体力バー(頭上)
     const seg = boss.w / boss.maxHp;
     for (let i = 0; i < boss.maxHp; i++) {
       ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
       ctx.fillRect(bx + i * seg + 1, top - (boss.kind === 'nushi' ? 32 : 12), seg - 2, 8);
     }
+  }
+
+  /** 壊せる石の柱。灰色の柱に、ひびの線を入れる。 */
+  private drawPillar(p: Pillar, cameraX: number): void {
+    const x = worldToScreen(p.x, cameraX);
+    if (x + p.w < 0 || x > VIEW_WIDTH) return;
+    const { ctx } = this;
+    const y = this.sy(p.y);
+    ctx.fillStyle = '#8d8d94';
+    ctx.fillRect(x, y, p.w, p.h);
+    ctx.fillStyle = '#a9a9b1';
+    ctx.fillRect(x, y, 8, p.h);
+    ctx.fillStyle = '#6a6a72';
+    ctx.fillRect(x - 6, y - 8, p.w + 12, 12); // 柱頭
+    ctx.strokeStyle = '#4a4a52';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + p.w * 0.6, y + 20);
+    ctx.lineTo(x + p.w * 0.35, y + 60);
+    ctx.lineTo(x + p.w * 0.65, y + 95);
+    ctx.lineTo(x + p.w * 0.4, y + 140);
+    ctx.stroke();
   }
 
   /** 弾(黄色の円)・放物線の弾(オレンジの円)・衝撃波(赤い帯)を描く。画面外は描かない。 */

@@ -119,7 +119,7 @@ describe('オオグイ(予備動作のあと突進する)', () => {
     expect(t.boss.script[t.boss.step]!.a).toBe('rest');
     const x = t.boss.x;
     expect(trace(t.boss, ticks(0.8) - 6, ctxAt(4000)).boss.x).toBe(x);
-    expect(bossFlags(t.boss)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: false });
+    expect(bossFlags(t.boss)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: false, staggered: false, bounceOnly: false });
   });
 
   it('往復範囲の端の近くで突進しても、範囲の外へは出ない', () => {
@@ -271,7 +271,7 @@ describe('ウキウキ(浮かんで急降下する)', () => {
   it('目を回している間は、予備動作・踏めない状態の目印が立っていない(踏める)', () => {
     const t = trace(make(6), ticks(0.75 + 2.0 + 1.0 + 0.5) + 60, ctxAt(1400));
     const dizzy = t.log.find((b) => b.script[b.step]!.a === 'dizzy')!;
-    expect(bossFlags(dizzy)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: false });
+    expect(bossFlags(dizzy)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: false, staggered: false, bounceOnly: false });
   });
 
   it('1.2 秒の目を回したあと、再び上昇する', () => {

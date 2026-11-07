@@ -334,9 +334,9 @@ describe('validatePlacements(配置の検査の確認)', () => {
 describe('最終ボス「ヌシ」の闘技場', () => {
   const nushi = STAGE.bosses[9]!;
 
-  it('10 番目(最も右側)の闘技場にいて、往復範囲の幅は 600、大きさは 200×250', () => {
+  it('10 番目(最も右側)の闘技場にいて、往復範囲の幅は 300、大きさは 200×250', () => {
     expect(nushi.def.name).toBe('ヌシ');
-    expect(nushi.right - nushi.left).toBe(600);
+    expect(nushi.right - nushi.left).toBe(300);
     expect([nushi.def.w, nushi.def.h]).toEqual([200, 250]);
     for (const b of STAGE.bosses.slice(0, 9)) expect(b.right).toBeLessThan(nushi.left);
   });

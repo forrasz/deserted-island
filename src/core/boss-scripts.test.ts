@@ -162,7 +162,7 @@ describe('bossFlags(踏めない・触れない・予備動作)', () => {
       { a: 'rest', time: 1 },
       { a: 'dizzy', time: 1 },
     ] as BossStep[]) {
-      expect(flagsFor(step)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: false });
+      expect(flagsFor(step)).toEqual({ hidden: false, stompImmune: false, harmless: false, telegraph: false, crouch: false, staggered: false, bounceOnly: false });
     }
   });
 

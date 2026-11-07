@@ -10,6 +10,8 @@ import {
   PART_HEIGHT,
   PART_WIDTH,
   HIT_BOUNCE_SPEED,
+  NUSHI_RECOVER_TIME,
+  NUSHI_STAGGER_DAMAGE,
   PLAYER_HEIGHT,
   PLAYER_INVULN_TIME,
   PLAYER_MAX_HP,
@@ -27,7 +29,15 @@ import {
   type Player,
   type WorldBounds,
 } from './player';
-import { resolveProjectileContact, stepProjectile, type Projectile } from './projectile';
+import { projectileRect, resolveProjectileContact, stepProjectile, type Projectile } from './projectile';
+import {
+  breakAllPillars,
+  createPillar,
+  pillarEdges,
+  standingPillarRects,
+  stepPillars,
+  type Pillar,
+} from './pillar';
 import { createPart, partRect, stepPart, type RaftPart } from './raft-part';
 import { STAGE, type Stage } from './stage';
 import { fallYOf, isFullySupported, platformsOf, solidsOf } from './terrain';
@@ -61,6 +71,8 @@ export interface GameState {
   bonus: BonusState | null;
   /** このプレイでボーナスステージを遊んだか(遊んだあとは、隠し穴は普通の地面)。 */
   bonusUsed: boolean;
+  /** 最終ボスの闘技場の柱(壊せる。ボスの突進が当たると壊れ、条件がそろうと再生する)。 */
+  pillars: Pillar[];
   /** 無敵モード(隠しコマンド)。オンの間は、敵・弾・石のダメージを受けず、穴に落ちてもHPが減らない。 */
   invincible: boolean;
 }
@@ -69,9 +81,15 @@ export interface GameState {
  * 初期状態。ボスとザコ敵は、ステージの配置(placements)から作る。
  * 既定はゲームのステージ。テストでは、敵なしのステージなどを渡せる。
  */
+/** 柱の西・東を分ける基準(ヌシの往復範囲の中心)。ヌシがいなければ、すべて西の柱として扱う。 */
+function pillarCenter(placements: Pick<Stage, 'bosses'>): number {
+  const n = placements.bosses.find((b) => b.def.kind === 'nushi');
+  return n ? (n.left + n.right + n.def.w) / 2 : Number.POSITIVE_INFINITY;
+}
+
 export function createGame(
   world: WorldBounds = DEFAULT_WORLD,
-  placements: Pick<Stage, 'bosses' | 'enemies'> = STAGE,
+  placements: Pick<Stage, 'bosses' | 'enemies'> & Partial<Pick<Stage, 'pillars'>> = STAGE,
 ): GameState {
   const player = createPlayer(100, world);
   return {
@@ -94,6 +112,7 @@ export function createGame(
     respawnLock: 0,
     bonus: null,
     bonusUsed: false,
+    pillars: (placements.pillars ?? []).map((r) => createPillar(r, pillarCenter(placements))),
     invincible: false,
   };
 }
@@ -102,7 +121,7 @@ export function createGame(
  * プレイヤーとボスの衝突解決。
  * - もぐっているボス(hidden)とは、接触しない(踏みつけも押し戻しも被弾もない)。
  * - 落下中かつ更新前の下辺がボス上辺付近なら踏みつけ(プレイヤーは跳ね返り、被弾しない)。ボスにダメージを与えるが、
- *   変身中(harmless)のボスにはダメージを与えない。転がっているボス(stompImmune)は踏みつけにならず、通常の接触になる。
+ *   変身中(harmless)と、通常の状態の最終ボス(bounceOnly)にはダメージを与えない。気絶中(staggered)の最終ボスには体力 -4 で、短い起き上がりの時間(NUSHI_RECOVER_TIME)のあと気絶が解ける。転がっているボス(stompImmune)は踏みつけにならず、通常の接触になる。
  * - それ以外の重なりは水平方向のボスの端まで押し戻し、プレイヤーが無敵でなければ被弾(hit)として小さく跳ね上げる。
  *   無敵中は押し戻しだけ行い、ボスはすり抜けられない。変身中(harmless)は、押し戻しも被弾もない。
  */
@@ -121,6 +140,17 @@ function resolveBossContact(
   if (!amount) return { player, boss, hit: false };
 
   if (!flags.stompImmune && isStomp(prevPlayer.y, player.vy, rect.y)) {
+    // 変身中と、通常の状態の最終ボスは、踏んでもダメージがない(跳ね返るだけ)。気絶中は大ダメージで、気絶が解ける
+    const damaged = flags.staggered
+      ? boss.invuln > 0
+        ? boss
+        : (() => {
+            const d = damageBoss(boss, NUSHI_STAGGER_DAMAGE);
+            return { ...d, stagger: d.alive ? NUSHI_RECOVER_TIME : 0 };
+          })()
+      : flags.harmless || flags.bounceOnly
+        ? boss
+        : damageBoss(boss);
     return {
       player: {
         ...player,
@@ -128,11 +158,12 @@ function resolveBossContact(
         vy: -STOMP_BOUNCE_SPEED,
         onGround: false,
       },
-      boss: flags.harmless ? boss : damageBoss(boss),
+      boss: damaged,
       hit: false,
     };
   }
-  if (flags.harmless) return { player, boss, hit: false };
+  // 変身中と気絶中は、触れても被弾せず、押し戻されもしない
+  if (flags.harmless || flags.staggered) return { player, boss, hit: false };
 
   const playerCenter = player.x + PLAYER_WIDTH / 2;
   const bossCenter = boss.x + boss.w / 2;
@@ -178,6 +209,14 @@ export function stepGame(
     return { ...state, hp: r.hp, hitInvuln: r.hitInvuln, bonus: r.bonus };
   }
 
+  // 立っている柱は、プレイヤーにとって通れない地形(崖と同じ)
+  const pillarRects = standingPillarRects(state.pillars);
+  const baseWorld = world;
+  world =
+    pillarRects.length > 0
+      ? { ...baseWorld, solids: [...solidsOf(baseWorld), ...pillarRects] }
+      : baseWorld;
+
   let prevPlayer = state.player;
   // 復帰直後は、短い間だけ操作を受け付けない(押し続けたキーで、すぐ再び穴へ落ちないように)
   const locked = state.respawnLock > 0;
@@ -208,8 +247,14 @@ export function stepGame(
   // ボス(行動の流れ。弾を出す)とザコ敵(各体の行動。プレイヤーの位置に反応する敵がいる)
   const playerCenterX = movedPlayer.x + PLAYER_WIDTH / 2;
   const spawned: Projectile[] = [];
+  const pillarPos = pillarEdges(state.pillars);
   const movedBosses = state.bosses.map((b) => {
-    const r = stepBossScript(b, { playerX: playerCenterX, groundY: world.groundY }, dt);
+    const playerInside = overlaps(playerRect(movedPlayer), { x: b.x, y: b.y, w: b.w, h: b.h });
+    const r = stepBossScript(
+      b,
+      { playerX: playerCenterX, groundY: world.groundY, pillars: pillarPos, playerInside },
+      dt,
+    );
     spawned.push(...r.spawns);
     return r.boss;
   });
@@ -220,7 +265,10 @@ export function stepGame(
   const flying = state.projectiles
     .map((p) => stepProjectile(p, projWorld, dt))
     .filter((p) => p.alive);
-  const movedProjectiles = [...flying, ...spawned];
+  // 立っている柱は、弾と衝撃波を止める
+  const movedProjectiles = [...flying, ...spawned].filter(
+    (p) => !pillarRects.some((r) => overlaps(projectileRect(p), r)),
+  );
 
   // 無敵時間は更新の冒頭で減らす(被弾した更新では PLAYER_INVULN_TIME のまま、次の更新から減る)
   // 無敵モードの間は、穴に落ちても被弾後の無敵時間(点滅)は始めず、常に「無敵時間中」として扱う
@@ -247,6 +295,17 @@ export function stepGame(
 
   const hp = Math.max(0, state.hp - (fell && !state.invincible ? 1 : 0) - (hit ? 1 : 0));
   const hitInvuln = hit ? PLAYER_INVULN_TIME : invulnLeft;
+
+  // 柱: ボスが気絶に入った更新で壊れる。壊れた柱は、条件がそろうと再生する
+  let pillars = state.pillars;
+  // 突進がぶつかった衝撃で、柱は両方とも崩れる(片方だけが残ると、ヌシの反対側に取り残されたとき、詰むため)
+  if (bosses.some((b, i) => state.bosses[i]!.stagger <= 0 && b.stagger > 0)) {
+    pillars = breakAllPillars(pillars);
+  }
+  // ヌシを倒したら、柱はすべて崩れ、もう立たない(先へ進める)
+  if (bosses.some((b, i) => state.bosses[i]!.alive && !b.alive && b.kind === 'nushi')) {
+    pillars = breakAllPillars(pillars);
+  }
 
   // 撃破された更新でのみ、そのボスの中央に部品を 1 個ドロップする(ボス 1 体につき 1 個)
   let parts = state.parts;
@@ -279,6 +338,18 @@ export function stepGame(
     finalPlayer = { ...player, x: SEA_X - PLAYER_WIDTH };
   }
 
+  pillars = stepPillars(
+    pillars,
+    {
+      anyStaggered: bosses.some((b) => b.stagger > 0),
+      blockers: [...bosses.filter((b) => b.alive).map(bossRect), playerRect(finalPlayer)],
+      playerLeft: finalPlayer.x,
+      playerRight: finalPlayer.x + PLAYER_WIDTH,
+      bossAlive: bosses.some((b) => b.kind === 'nushi' && b.alive),
+    },
+    dt,
+  );
+
   // 隠し穴(中間地点の地面)に立つと、ボーナスステージが始まる(1 回のプレイで 1 回だけ)
   const enterBonus = !state.bonusUsed && !fell && hp > 0 && inHiddenHole(finalPlayer);
 
@@ -298,6 +369,7 @@ export function stepGame(
     respawnLock,
     bonus: enterBonus ? createBonus(respawn) : null,
     bonusUsed: state.bonusUsed,
+    pillars,
     invincible: state.invincible,
   };
 }

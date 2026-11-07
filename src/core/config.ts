@@ -190,3 +190,16 @@ export const BONUS_KINDS: readonly ('heart' | 'stone')[] = [
 /** 中間地点の隠し穴(地面の上の範囲)。横幅の真ん中を中心にする。 */
 export const HIDDEN_HOLE_WIDTH = 120;
 export const HIDDEN_HOLE_X = WORLD_WIDTH / 2 - HIDDEN_HOLE_WIDTH / 2;
+
+// --- 最終ボス「ヌシ」の柱と気絶 ---
+/** 闘技場の入口に立つ、壊せる石の柱の大きさ(px)。高さはジャンプの最高点(約 140)より高い。 */
+export const FINAL_PILLAR_WIDTH = 60;
+export const FINAL_PILLAR_HEIGHT = 180;
+/** ヌシが柱にぶつかったあとの気絶の時間(秒)。 */
+export const NUSHI_STAGGER_TIME = 6;
+/** 気絶中のヌシを踏んだときの、体力の減り方。 */
+export const NUSHI_STAGGER_DAMAGE = 4;
+/** 気絶中に踏まれたあと、起き上がるまでの時間(秒)。その間は、かがんだまま、触れても被弾せず、踏んでもダメージを受けない。 */
+export const NUSHI_RECOVER_TIME = 0.5;
+/** 壊れた柱が、再び立てるようになるまでの時間(秒)。 */
+export const PILLAR_REGROW_TIME = 8;

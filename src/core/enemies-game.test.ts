@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOSS_DEFS, createBoss, type Boss } from './boss';
+import { BOSS_DEFS, bossRect, createBoss, type Boss } from './boss';
 import {
   ENEMY_SIZE,
   FIXED_DT,
@@ -176,12 +176,14 @@ describe('ボスごとのドロップと部品 10 個', () => {
   });
 
   it('10 体すべてを倒すと、部品が合計 10 個ドロップされる', () => {
-    const bosses = BOSS_DEFS.map((def, k) => stillBoss(1000 + k * 600, def, { hp: 1, transformed: true }));
+    const bosses = BOSS_DEFS.map((def, k) =>
+      stillBoss(1000 + k * 600, def, { hp: 1, transformed: true, ...(def.kind === 'nushi' ? { stagger: 6 } : {}) }),
+    );
     let g = world([], bosses);
     for (let k = 0; k < 10; k++) {
       const b = g.bosses[k]!;
       g = stepGame(
-        { ...g, player: { x: b.x + 20, y: b.y - H - 5, vx: 0, vy: 300, onGround: false } },
+        { ...g, player: { x: b.x + 20, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false } },
         NO_INPUT,
         FIXED_DT,
       );

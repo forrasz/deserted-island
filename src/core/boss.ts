@@ -44,7 +44,7 @@ export interface BossDef {
   script?: BossStep[];
   /** 強化形態の行動の流れ(最終ボスだけ)。 */
   script2?: BossStep[];
-  /** 休んでいる間に身をかがめたときの高さ(最終ボスだけ。ジャンプで踏める高さにする)。 */
+  /** 気絶している間に身をかがめたときの高さ(最終ボスだけ。ジャンプで踏める高さにする)。 */
   restH?: number;
 }
 
@@ -65,7 +65,7 @@ export const DEFAULT_BOSS_DEF: BossDef = {
 export const FINAL_BOSS_WIDTH = 200;
 export const FINAL_BOSS_HEIGHT = 250;
 export const FINAL_BOSS_HP = 12;
-/** 最終ボスが休んでいる間に身をかがめたときの高さ。ジャンプの最高点(約 140)より低く、踏める。 */
+/** 最終ボスが気絶している間に身をかがめたときの高さ。ジャンプの最高点(約 140)より低く、踏める。 */
 export const FINAL_BOSS_REST_HEIGHT = 100;
 
 /**
@@ -82,7 +82,7 @@ export const BOSS_DEFS: BossDef[] = [
   { id: 6, kind: 'ukiuki', script: BOSS_SCRIPTS.ukiuki, name: 'ウキウキ', maxHp: 4, speed: 120, rangeWidth: 460, w: BOSS_WIDTH, h: BOSS_HEIGHT, color: '#ff7043' },
   { id: 7, kind: 'kororin', script: BOSS_SCRIPTS.kororin, name: 'コロリン', maxHp: 5, speed: 127, rangeWidth: 470, w: BOSS_WIDTH, h: BOSS_HEIGHT, color: '#558b2f' },
   { id: 8, kind: 'jishin', script: BOSS_SCRIPTS.jishin, name: 'ジシン', maxHp: 5, speed: 134, rangeWidth: 490, w: BOSS_WIDTH, h: BOSS_HEIGHT, color: '#455a64' },
-  { id: 9, kind: 'nushi', script: NUSHI_FORM1, script2: NUSHI_FORM2, restH: FINAL_BOSS_REST_HEIGHT, name: 'ヌシ', maxHp: FINAL_BOSS_HP, speed: 140, rangeWidth: 600, w: FINAL_BOSS_WIDTH, h: FINAL_BOSS_HEIGHT, color: '#b71c1c' },
+  { id: 9, kind: 'nushi', script: NUSHI_FORM1, script2: NUSHI_FORM2, restH: FINAL_BOSS_REST_HEIGHT, name: 'ヌシ', maxHp: FINAL_BOSS_HP, speed: 140, rangeWidth: 300, w: FINAL_BOSS_WIDTH, h: FINAL_BOSS_HEIGHT, color: '#b71c1c' },
 ];
 
 /** x, y はボス矩形の左上(ワールド座標)。left/right は x(左辺)が取りうる往復範囲。 */
@@ -115,7 +115,7 @@ export interface Boss {
   /** 行動の流れ(通常形態)と、強化形態の流れ(最終ボスだけ)。 */
   script: BossStep[];
   script2?: BossStep[];
-  /** 休んでいる間に身をかがめたときの高さ(省略時はかがまない)。 */
+  /** 気絶している間に身をかがめたときの高さ(省略時はかがまない)。 */
   restH?: number;
   /** 現在の行動の番号と、その行動の経過時間(秒)。 */
   step: number;
@@ -128,6 +128,8 @@ export interface Boss {
   transformT: number;
   /** 変身を済ませたか(変身は 1 回だけ)。 */
   transformed: boolean;
+  /** 気絶の残り時間(秒)。0 より大きい間は気絶中(最終ボスが突進で柱にぶつかったとき)。 */
+  stagger: number;
 }
 
 export function createBoss(
@@ -165,10 +167,11 @@ export function createBoss(
     aimDir: 1,
     transformT: 0,
     transformed: false,
+    stagger: 0,
   };
 }
 
-/** 当たり判定の矩形。休んでいる間に身をかがめるボス(最終ボス)は、下辺を地面に保ったまま、高さが低くなる。 */
+/** 当たり判定の矩形。気絶している間に身をかがめるボス(最終ボス)は、下辺を地面に保ったまま、高さが低くなる。 */
 export function bossRect(boss: Boss) {
   if (boss.restH !== undefined && bossFlags(boss).crouch) {
     return { x: boss.x, y: boss.y + boss.h - boss.restH, w: boss.w, h: boss.restH };
@@ -193,9 +196,9 @@ export function stepBoss(boss: Boss, dt: number = FIXED_DT): Boss {
   return { ...boss, x, vx, invuln };
 }
 
-/** 踏みつけによるダメージ。無敵中・撃破済みならそのまま返す。体力 0 で撃破。 */
-export function damageBoss(boss: Boss): Boss {
+/** 踏みつけによるダメージ(既定 1)。無敵中・撃破済みならそのまま返す。体力 0 で撃破。 */
+export function damageBoss(boss: Boss, amount = 1): Boss {
   if (!boss.alive || boss.invuln > 0) return boss;
-  const hp = boss.hp - 1;
+  const hp = Math.max(0, boss.hp - amount);
   return { ...boss, hp, invuln: BOSS_INVULN_TIME, alive: hp > 0 };
 }

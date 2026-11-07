@@ -2,6 +2,7 @@ import type { Boss } from './boss';
 import {
   BOSS_TRANSFORM_TIME,
   FIXED_DT,
+  NUSHI_STAGGER_TIME,
   GRAVITY,
   PROJECTILE_SIZE,
   WAVE_WIDTH,
@@ -34,6 +35,10 @@ export interface BossCtx {
   /** プレイヤーの中心の x。 */
   playerX: number;
   groundY: number;
+  /** 立っている柱の位置(なければ null / 省略)。西の柱の東の縁(west)と、東の柱の西の縁(east)。最終ボスの突進が、この位置に達すると柱にぶつかる。 */
+  pillars?: { west: number | null; east: number | null };
+  /** プレイヤーが、立った姿(かがんでいない)のボスの矩形と重なっているか。気絶から起き上がるとき、重なっていると、離れるまで起き上がらない。 */
+  playerInside?: boolean;
 }
 
 export interface BossStepResult {
@@ -102,7 +107,7 @@ export const BOSS_SCRIPTS = {
 /**
  * 最終ボス「ヌシ」の通常形態の行動の流れ。
  * 往復 → 予備動作 → 突進 → 休み(1.0 秒)→ 予備動作 → 直進弾 3 発(低・中・高)→ ジャンプと衝撃波 → 休み(1.2 秒)。
- * 休みの間は身をかがめて(高さ 100)、ジャンプで踏める。ジャンプの最高点から上辺まで落ちるのに約 0.58 秒かかるため、休みは 1.0 秒以上にしてある。
+ * 通常の状態のヌシは、踏んでもダメージを受けない。突進が柱にぶつかると気絶し、その間だけ、身をかがめて(高さ 100)踏める。
  * 弾の高さ(tops)は、地面から弾の上端までの高さ。48 は地面に立つプレイヤー(高さ 56)に当たり、100 と 170 は頭上を通る。
  */
 export const NUSHI_FORM1: BossStep[] = [
@@ -177,8 +182,12 @@ export interface BossFlags {
   harmless: boolean;
   /** 攻撃の予備動作の最中(点滅で示す)。 */
   telegraph: boolean;
-  /** 休んでいて、身をかがめている(restH を持つボスだけ。高さが低くなり、踏める)。 */
+  /** 気絶していて、身をかがめている(restH を持つボスだけ。高さが低くなり、踏める)。 */
   crouch: boolean;
+  /** 気絶中(最終ボス)。触れても被弾せず、踏むと大ダメージを受ける。 */
+  staggered: boolean;
+  /** 踏んでもダメージを受けない通常の状態(最終ボスの、気絶・変身中以外)。踏むと跳ね返るだけで、触れれば被弾する。 */
+  bounceOnly: boolean;
 }
 
 export function bossFlags(b: Boss): BossFlags {
@@ -188,7 +197,9 @@ export function bossFlags(b: Boss): BossFlags {
     stompImmune: s?.a === 'roll',
     harmless: b.transformT > 0,
     telegraph: s?.a === 'telegraph' && b.transformT <= 0,
-    crouch: b.restH !== undefined && s?.a === 'rest' && b.transformT <= 0,
+    crouch: b.restH !== undefined && b.stagger > 0,
+    staggered: b.stagger > 0,
+    bounceOnly: b.kind === 'nushi' && b.stagger <= 0 && b.transformT <= 0,
   };
 }
 
@@ -203,7 +214,7 @@ export function stepBossScript(boss: Boss, ctx: BossCtx, dt: number = FIXED_DT):
 
   // 最終ボスの形態変化: 体力が半分以下になったら、1 回だけ変身に入る
   if (b.kind === 'nushi' && !b.transformed && b.hp <= b.maxHp / 2) {
-    b = { ...b, transformed: true, transformT: BOSS_TRANSFORM_TIME, y: floorY, vy: 0, vx: 0 };
+    b = { ...b, transformed: true, transformT: BOSS_TRANSFORM_TIME, y: floorY, vy: 0, vx: 0, stagger: 0 };
   }
   if (b.transformT > 0) {
     const transformT = b.transformT - dt;
@@ -211,6 +222,17 @@ export function stepBossScript(boss: Boss, ctx: BossCtx, dt: number = FIXED_DT):
       return { boss: { ...b, transformT: 0, form: 2, step: 0, t: 0 }, spawns: [] };
     }
     return { boss: { ...b, transformT, vx: 0 }, spawns: [] };
+  }
+
+  // 気絶中: その場で動かず、攻撃もしない。時間が来たら、行動の流れの最初から再開する
+  if (b.stagger > 0) {
+    const stagger = b.stagger - dt;
+    if (stagger <= 0) {
+      // プレイヤーが重なっていると、離れるまで、かがんだまま起き上がらない(立った姿の中にプレイヤーを巻き込まないため)
+      if (ctx.playerInside) return { boss: { ...b, stagger: 0.01, vx: 0 }, spawns: [] };
+      return { boss: { ...b, stagger: 0, step: 0, t: 0, vx: 0 }, spawns: [] };
+    }
+    return { boss: { ...b, stagger, vx: 0 }, spawns: [] };
   }
 
   const script = scriptOf(b);
@@ -243,6 +265,14 @@ export function stepBossScript(boss: Boss, ctx: BossCtx, dt: number = FIXED_DT):
       const dir = b.aimDir;
       const x = clampX(b, b.x + dir * s.speed * dt);
       const moved = { ...b, x, dir, vx: dir * s.speed, t };
+      // 突進が、往復範囲の端(= 柱の縁)に達したら、柱にぶつかって気絶する(西向きは西の柱、東向きは東の柱)
+      if (b.kind === 'nushi') {
+        const west = ctx.pillars?.west;
+        const east = ctx.pillars?.east;
+        const hitWest = dir < 0 && west != null && x <= west + 1e-6;
+        const hitEast = dir > 0 && east != null && x + b.w >= east - 1e-6;
+        if (hitWest || hitEast) return { boss: { ...moved, vx: 0, stagger: NUSHI_STAGGER_TIME }, spawns };
+      }
       return { boss: t >= s.time ? next(moved, script) : moved, spawns };
     }
     case 'roll': {

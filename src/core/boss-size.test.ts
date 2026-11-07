@@ -24,10 +24,10 @@ describe('大型のボス(最終ボス)の大きさ', () => {
 
   it('踏みつけの上辺は、大きさに合わせた位置(地面から 250)になる', () => {
     const b = bigBoss(1000);
-    // ボスの上辺の少し上から落下するプレイヤー
+    // ボスの上辺の少し上から落下するプレイヤー(ヌシは踏んでもダメージがなく、跳ね返るだけ)
     const p: Player = { x: 1090, y: b.y - H - 5, vx: 0, vy: 300, onGround: false };
     const g = stepGame(world(b, p), NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(11);
+    expect(g.bosses[0]!.hp).toBe(12);
     expect(g.player.y + H).toBe(b.y); // ボスの上辺(地面から 250)に着地して跳ね返る
     expect(b.y).toBe(GROUND_Y - 250);
   });
@@ -56,8 +56,8 @@ describe('大型のボス(最終ボス)の大きさ', () => {
   });
 
   it('撃破したとき、部品は大型のボスの中央(幅 200・高さ 250 の中心)にドロップする', () => {
-    const b = bigBoss(1000, { hp: 1, transformed: true, form: 2 }); // 変身は済んでいる状態
-    const p: Player = { x: 1090, y: b.y - H - 5, vx: 0, vy: 300, onGround: false };
+    const b = bigBoss(1000, { hp: 1, transformed: true, form: 2, stagger: 6 }); // 変身は済んでいて、気絶している状態
+    const p: Player = { x: 1090, y: b.y + 150 - H - 5, vx: 0, vy: 300, onGround: false }; // かがんだ上辺(地面から 100)
     const g = stepGame(world(b, p), NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);

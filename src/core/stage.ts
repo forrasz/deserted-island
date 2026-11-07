@@ -1,6 +1,12 @@
 import { BOSS_DEFS, type BossDef } from './boss';
 import type { Rect } from './collision';
-import { GROUND_Y, WORLD_HEIGHT, WORLD_WIDTH } from './config';
+import {
+  FINAL_PILLAR_HEIGHT,
+  FINAL_PILLAR_WIDTH,
+  GROUND_Y,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+} from './config';
 import type { EnemyKind } from './enemy-defs';
 import type { WorldBounds } from './terrain';
 
@@ -45,12 +51,21 @@ export interface Stage {
   bosses: BossPlacement[];
   /** ザコ敵(10 種類 × 3 体)。 */
   enemies: EnemyPlacement[];
+  /** 最終ボスの闘技場の入口(西)と出口(東)に立つ、壊せる柱(通れない。ボスの突進が当たると壊れる)。 */
+  pillars: Rect[];
 }
 
 /** ボスの往復範囲の左端(ボスの左辺 x)。10 か所の闘技場に 1 体ずつ。 */
 export const BOSS_LEFTS: readonly number[] = [
-  1600, 4450, 7250, 10850, 14250, 17650, 20810, 21810, 22810, 23810,
+  1600, 4450, 7250, 10850, 14250, 17650, 20810, 21810, 22810, 24020,
 ];
+
+/**
+ * 最終ボス(ヌシ)の闘技場の柱の位置(左辺 x)。柱の東の縁が、ヌシの往復範囲の左端(= BOSS_LEFTS の最後)になる。
+ * プレイヤーは柱の西側から来て、ヌシの突進を柱に当てて気絶させる。
+ */
+export const FINAL_PILLAR_X = BOSS_LEFTS[BOSS_LEFTS.length - 1]! - FINAL_PILLAR_WIDTH;
+/** 東の柱の位置(左辺 x)。柱の西の縁が、ヌシの往復範囲の右端のヌシの右辺(範囲の右端 + 本体の幅)になる。 */
 
 /** 浮島の厚み(px)。 */
 const ISLAND_THICKNESS = 20;
@@ -272,6 +287,15 @@ function buildStage(): Stage {
     route,
     bosses,
     enemies,
+    pillars: [
+      { x: FINAL_PILLAR_X, y: GROUND_Y - FINAL_PILLAR_HEIGHT, w: FINAL_PILLAR_WIDTH, h: FINAL_PILLAR_HEIGHT },
+      {
+        x: bosses[9]!.right + bosses[9]!.def.w,
+        y: GROUND_Y - FINAL_PILLAR_HEIGHT,
+        w: FINAL_PILLAR_WIDTH,
+        h: FINAL_PILLAR_HEIGHT,
+      },
+    ],
   };
 }
 

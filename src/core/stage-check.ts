@@ -123,6 +123,26 @@ export function validatePlacements(stage: Stage): string[] {
     }
   }
 
+  // 最終ボスの柱: 柱の東の縁がヌシの往復範囲の左端と一致し、柱の西 100 からヌシの範囲までが平らな地面で、突進が柱に届く
+  const finalBoss = stage.bosses[stage.bosses.length - 1];
+  if (finalBoss && finalBoss.def.kind === 'nushi') {
+    if (stage.pillars.length !== 2) errors.push(`最終ボスの闘技場の柱が 2 本ではない: ${stage.pillars.length}`);
+    const westP = stage.pillars.find((p) => p.x + p.w === finalBoss.left);
+    const eastP = stage.pillars.find((p) => p.x === finalBoss.right + finalBoss.def.w);
+    if (!westP) errors.push(`西の柱の東の縁がヌシの往復範囲の左端と一致しない(左端 ${finalBoss.left})`);
+    if (!eastP) errors.push(`東の柱の西の縁がヌシの本体の右端(往復範囲の右端 + 幅)と一致しない`);
+    for (const [i, p] of stage.pillars.entries()) {
+      if (touchesFeature(stage, p.x - BOSS_MARGIN, p.x + p.w + BOSS_MARGIN)) errors.push(`柱 ${i} の周りに穴・崖・浮島がある`);
+    }
+    if (touchesFeature(stage, finalBoss.left - BOSS_MARGIN, finalBoss.right + finalBoss.def.w + BOSS_MARGIN)) {
+      errors.push('ヌシの範囲に穴・崖・浮島がある');
+    }
+    const dash = finalBoss.def.script?.find((s) => s.a === 'dash');
+    if (dash && dash.a === 'dash' && finalBoss.right - finalBoss.left > dash.speed * dash.time) {
+      errors.push('ヌシの突進が、往復範囲の東端から柱に届かない');
+    }
+  }
+
   // 隠し穴(ボーナスステージの入口): 平らな地面の上(穴・崖がない)で、ザコ敵とボスの往復範囲と重ならない
   const h0 = HIDDEN_HOLE_X;
   const h1 = HIDDEN_HOLE_X + HIDDEN_HOLE_WIDTH;
