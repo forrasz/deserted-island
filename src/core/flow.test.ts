@@ -25,7 +25,7 @@ function readyToEscape(): Flow {
     bosses: [{ ...createBoss(), alive: false, hp: 0 }],
     enemies: [],
   };
-  return { phase: 'playing', game, confirmHeld: false };
+  return { phase: 'playing', game, confirmHeld: false, cheat: 0 };
 }
 
 /** 脱出してクリア画面になった Flow(決定キーは離れている)。 */
@@ -95,7 +95,7 @@ describe('クリア', () => {
   });
 
   it('プレイ中は世界が進行する(ボスが往復し、プレイヤーが動く)', () => {
-    let f: Flow = { phase: 'playing', game: createGame(), confirmHeld: false };
+    let f: Flow = { phase: 'playing', game: createGame(), confirmHeld: false, cheat: 0 };
     const boss0 = f.game.bosses[0]!.x;
     f = run(f, RIGHT, 30);
     expect(f.game.bosses[0]!.x).not.toBe(boss0);
@@ -126,7 +126,7 @@ describe('再プレイ', () => {
     let f = stepFlow(cleared(), ENTER, FIXED_DT);
     f = stepFlow(f, NO_INPUT, FIXED_DT);
     // 2 周目: 同じ条件で脱出
-    f = { ...readyToEscape(), confirmHeld: false };
+    f = { ...readyToEscape(), confirmHeld: false, cheat: 0 };
     f = run(f, RIGHT, 300);
     expect(f.phase).toBe('cleared');
     f = stepFlow(stepFlow(f, NO_INPUT, FIXED_DT), ENTER, FIXED_DT);

@@ -61,6 +61,8 @@ export interface GameState {
   bonus: BonusState | null;
   /** このプレイでボーナスステージを遊んだか(遊んだあとは、隠し穴は普通の地面)。 */
   bonusUsed: boolean;
+  /** 無敵モード(隠しコマンド)。オンの間は、敵・弾・石のダメージを受けず、穴に落ちてもHPが減らない。 */
+  invincible: boolean;
 }
 
 /**
@@ -92,6 +94,7 @@ export function createGame(
     respawnLock: 0,
     bonus: null,
     bonusUsed: false,
+    invincible: false,
   };
 }
 
@@ -157,7 +160,7 @@ export function stepGame(
 ): GameState {
   // ボーナスステージの最中は、本編を更新せず、広間だけを更新する
   if (state.bonus) {
-    const r = stepBonus(state.bonus, state.hp, state.hitInvuln, input, dt);
+    const r = stepBonus(state.bonus, state.hp, state.hitInvuln, input, dt, state.invincible);
     if (r.done || r.hp <= 0) {
       // 退場(死亡のときも、ゲームオーバーの背景として地上へ戻しておく)
       return {
@@ -220,8 +223,10 @@ export function stepGame(
   const movedProjectiles = [...flying, ...spawned];
 
   // 無敵時間は更新の冒頭で減らす(被弾した更新では PLAYER_INVULN_TIME のまま、次の更新から減る)
-  const invulnLeft = fell ? PLAYER_INVULN_TIME : Math.max(0, state.hitInvuln - dt);
-  const invulnerable = invulnLeft > 0;
+  // 無敵モードの間は、穴に落ちても被弾後の無敵時間(点滅)は始めず、常に「無敵時間中」として扱う
+  const invulnLeft =
+    fell && !state.invincible ? PLAYER_INVULN_TIME : Math.max(0, state.hitInvuln - dt);
+  const invulnerable = invulnLeft > 0 || state.invincible;
 
   // ボスとの衝突(各体に順に適用)→ ザコ敵との衝突。被弾は 1 更新に 1 回
   let player = movedPlayer;
@@ -240,7 +245,7 @@ export function stepGame(
   const projectiles = projResult.projectiles.filter((p) => p.alive);
   const hit = bossHit || enemyResult.hit || projResult.hit;
 
-  const hp = Math.max(0, state.hp - (fell ? 1 : 0) - (hit ? 1 : 0));
+  const hp = Math.max(0, state.hp - (fell && !state.invincible ? 1 : 0) - (hit ? 1 : 0));
   const hitInvuln = hit ? PLAYER_INVULN_TIME : invulnLeft;
 
   // 撃破された更新でのみ、そのボスの中央に部品を 1 個ドロップする(ボス 1 体につき 1 個)
@@ -293,5 +298,6 @@ export function stepGame(
     respawnLock,
     bonus: enterBonus ? createBonus(respawn) : null,
     bonusUsed: state.bonusUsed,
+    invincible: state.invincible,
   };
 }

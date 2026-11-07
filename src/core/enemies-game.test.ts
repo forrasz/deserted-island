@@ -215,7 +215,7 @@ describe('再プレイでの初期化', () => {
       partsCollected: 4,
       escaped: true,
     };
-    const f = stepFlow({ phase: 'cleared', game: killed, confirmHeld: false }, ENTER, FIXED_DT);
+    const f = stepFlow({ phase: 'cleared', game: killed, confirmHeld: false, cheat: 0 }, ENTER, FIXED_DT);
     expect(f.phase).toBe('playing');
     expect(f.game).toEqual(createGame());
     expect(f.game.enemies.every((e) => e.alive)).toBe(true);
@@ -232,7 +232,7 @@ describe('再プレイでの初期化', () => {
       dead: true,
       enemies: g0.enemies.map((e) => ({ ...e, alive: false })),
     };
-    const f = stepFlow({ phase: 'gameover', game: dead, confirmHeld: false }, ENTER, FIXED_DT);
+    const f = stepFlow({ phase: 'gameover', game: dead, confirmHeld: false, cheat: 0 }, ENTER, FIXED_DT);
     expect(f.phase).toBe('playing');
     expect(f.game).toEqual(createGame());
   });

@@ -122,12 +122,13 @@ export function stepBonus(
   hitInvuln: number,
   input: InputState,
   dt: number = FIXED_DT,
+  invincible = false,
 ): BonusStep {
   const t = bonus.t + dt;
   const locked = bonus.stun > 0;
   let stun = Math.max(0, bonus.stun - dt);
   const invulnLeft = Math.max(0, hitInvuln - dt);
-  const invulnerable = invulnLeft > 0;
+  const invulnerable = invulnLeft > 0 || invincible;
 
   let player = stepPlayer(bonus.player, locked ? NO_INPUT : input, dt, BONUS_WORLD);
 

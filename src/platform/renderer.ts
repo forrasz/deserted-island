@@ -73,7 +73,7 @@ export class Renderer {
 
     // ボーナスステージの最中は、地下の広間だけを描く
     if (flow.game.bonus) {
-      this.drawBonus(flow.game.bonus, hp, hitInvuln, cameraX);
+      this.drawBonus(flow.game.bonus, hp, hitInvuln, cameraX, flow.game.invincible);
       return;
     }
 
@@ -122,7 +122,8 @@ export class Renderer {
       }
     }
 
-    this.drawPlayer(player, hitInvuln, cameraX);
+    this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible);
+    if (flow.game.invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
 
     // HUD(画面座標の固定位置。カメラの影響を受けない)
     this.drawHp(hp);
@@ -140,13 +141,18 @@ export class Renderer {
       this.text('イカダがないと海へは出られない…', VIEW_WIDTH / 2, 150, 28, 'center');
     }
 
-    if (flow.phase === 'title') this.drawTitle();
+    if (flow.phase === 'title') this.drawTitle(flow.game.invincible);
     if (flow.phase === 'cleared') this.drawCleared();
     if (flow.phase === 'gameover') this.drawGameOver();
   }
 
   /** プレイヤー(素材があれば画像、なければ四角形)。無敵中は点滅する。 */
-  private drawPlayer(player: { x: number; y: number; vx: number }, hitInvuln: number, cameraX: number): void {
+  private drawPlayer(
+    player: { x: number; y: number; vx: number },
+    hitInvuln: number,
+    cameraX: number,
+    invincible: boolean,
+  ): void {
     const { ctx } = this;
     this.playerFacing = nextFacing(this.playerFacing, player.vx);
     const playerImg = this.assets.get('player');
@@ -160,15 +166,21 @@ export class Renderer {
     if (blinkVisible(hitInvuln)) {
       if (playerImg) {
         this.drawSprite(playerImg, playerBox, this.playerFacing);
+        if (invincible) {
+          // 画像は色を変えられないので、金色の枠で示す
+          ctx.strokeStyle = '#ffd700';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(playerBox.x - 1, playerBox.y - 1, playerBox.w + 2, playerBox.h + 2);
+        }
       } else {
-        ctx.fillStyle = '#d2362b';
+        ctx.fillStyle = invincible ? '#ffd700' : '#d2362b';
         ctx.fillRect(playerBox.x, playerBox.y, playerBox.w, playerBox.h);
       }
     }
   }
 
   /** ボーナスステージ(地下の広間)。暗い背景・床・吹き出し口・ハートと石・プレイヤー・HUD。 */
-  private drawBonus(bonus: BonusState, hp: number, hitInvuln: number, cameraX: number): void {
+  private drawBonus(bonus: BonusState, hp: number, hitInvuln: number, cameraX: number, invincible: boolean): void {
     const { ctx } = this;
     ctx.fillStyle = '#241a2e';
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
@@ -203,7 +215,8 @@ export class Renderer {
       this.text('出口', exitX + 6, BONUS_GROUND_Y - 60, 24, 'left', '#fff3a0');
     }
 
-    this.drawPlayer(bonus.player, hitInvuln, cameraX);
+    this.drawPlayer(bonus.player, hitInvuln, cameraX, invincible);
+    if (invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
 
     // HUD
     this.drawHp(hp);
@@ -564,13 +577,14 @@ export class Renderer {
     this.ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
   }
 
-  private drawTitle(): void {
+  private drawTitle(invincible: boolean): void {
     this.overlay();
     this.text('無人島脱出', VIEW_WIDTH / 2, 130, 72, 'center');
     this.text('Enter キーでスタート', VIEW_WIDTH / 2, 250, 32, 'center');
     this.text('← → / A D: 移動    Space: ジャンプ', VIEW_WIDTH / 2, 340, 22, 'center');
     this.text('ボスを上から踏んで倒し、イカダの部品を手に入れよう', VIEW_WIDTH / 2, 380, 22, 'center');
     this.text('イカダを完成させて、右端の海から脱出しよう', VIEW_WIDTH / 2, 420, 22, 'center');
+    if (invincible) this.text('無敵モード', VIEW_WIDTH / 2, 470, 28, 'center', '#ffd700');
   }
 
   /** 画面左上のHP。「HP」の文字と、残りHPの数だけの赤いハート(失ったぶんは暗いハート)。 */

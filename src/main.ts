@@ -27,12 +27,15 @@ async function start(canvas: HTMLCanvasElement): Promise<void> {
   const stepper = new FixedStepper();
   let flow = createFlow();
   let last = performance.now();
+  let pendingCodes: string[] = [];
 
   function frame(now: number): void {
     // 縦向きの間は案内を出してゲームを止める(止めた時間は、横向きに戻ったあとに消化しない)
     const portrait = isPortrait(window.innerWidth, window.innerHeight);
     notice?.classList.toggle('show', portrait);
     if (portrait) {
+      keyboard.drainPresses(); // 止まっている間のキーは、あとで入力されたことにしない
+      pendingCodes = [];
       touch.reset();
       last = now;
       requestAnimationFrame(frame);
@@ -43,8 +46,12 @@ async function start(canvas: HTMLCanvasElement): Promise<void> {
     last = now;
 
     touch.setConfirmEnabled(flow.phase !== 'playing');
+    // 隠しコマンド用のキーの押下は、最初の更新にだけ渡す(複数回の更新で二重に数えない)。
+    // 更新が 0 回のフレームでは、次のフレームへ持ち越す
+    pendingCodes.push(...keyboard.drainPresses());
     for (let i = 0; i < steps; i++) {
-      flow = stepFlow(flow, mergeInput(keyboard.snapshot(), touch.snapshot()), FIXED_DT);
+      flow = stepFlow(flow, mergeInput(keyboard.snapshot(), touch.snapshot()), FIXED_DT, pendingCodes);
+      pendingCodes = [];
       touch.setConfirmEnabled(flow.phase !== 'playing');
     }
 

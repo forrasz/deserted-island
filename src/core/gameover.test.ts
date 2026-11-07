@@ -14,7 +14,7 @@ function stillBoss(x = 1000, over: Partial<Boss> = {}): Boss {
 }
 
 function playing(game: Partial<GameState>, confirmHeld = false): Flow {
-  return { phase: 'playing', game: { ...createGame(), ...game }, confirmHeld };
+  return { phase: 'playing', game: { ...createGame(), ...game }, confirmHeld, cheat: 0 };
 }
 
 /** ボスの左側から接触して被弾する状態(HPを指定)。 */
