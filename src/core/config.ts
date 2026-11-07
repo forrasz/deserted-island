@@ -149,3 +149,44 @@ export const WAVE_LIFE = 2;
 /** 最終ボスの変身の時間(秒)と、強化形態で時間を縮める倍率。 */
 export const BOSS_TRANSFORM_TIME = 1.5;
 export const BOSS_RAGE_TIME_SCALE = 0.6;
+
+// --- ボーナスステージ(地下の広間) ---
+/** 広間の大きさ。高さは画面 1 枚ぶん(縦のカメラは固定)。 */
+export const BONUS_WIDTH = 2880;
+export const BONUS_HEIGHT = VIEW_HEIGHT;
+/** 広間の床の上面。 */
+export const BONUS_GROUND_Y = BONUS_HEIGHT - 80;
+/** 入場してから自動で終わるまでの時間(秒)。 */
+export const BONUS_DURATION = 30;
+/** 広間の右端から、この幅の中に入ると出口に着いたとみなす(px)。 */
+export const BONUS_EXIT_WIDTH = 40;
+/** 広間での、プレイヤーの開始位置(左辺 x)。 */
+export const BONUS_START_X = 100;
+/** 入場直後に案内を出す時間(秒)。 */
+export const BONUS_BANNER_TIME = 2;
+/** 石に当たったときの硬直の時間(秒)。 */
+export const STONE_STUN_TIME = 1.5;
+/** ハート・石の大きさ(px の正方形)。 */
+export const BONUS_ITEM_SIZE = 28;
+/** 最初の飛び出しの時刻と、その後の間隔(秒)。 */
+export const BONUS_SPAWN_START = 1.0;
+export const BONUS_SPAWN_INTERVAL = 0.6;
+/** 飛び出しの初速(上向き、px/s)と、横の速さ(±、px/s)。重力は本編と同じ。 */
+export const BONUS_LAUNCH_SPEED = 950;
+export const BONUS_DRIFT_SPEED = 100;
+/** 吹き出し口の x(床の上)。n 番目は n mod 6 の口から出る。 */
+export const BONUS_VENTS: readonly number[] = [500, 900, 1300, 1700, 2100, 2500];
+/** 飛び出すものの順番(n mod 8)。ハートは 3/8。 */
+export const BONUS_KINDS: readonly ('heart' | 'stone')[] = [
+  'stone',
+  'heart',
+  'stone',
+  'stone',
+  'heart',
+  'stone',
+  'heart',
+  'stone',
+];
+/** 中間地点の隠し穴(地面の上の範囲)。横幅の真ん中を中心にする。 */
+export const HIDDEN_HOLE_WIDTH = 120;
+export const HIDDEN_HOLE_X = WORLD_WIDTH / 2 - HIDDEN_HOLE_WIDTH / 2;

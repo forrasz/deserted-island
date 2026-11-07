@@ -1,5 +1,5 @@
-import { computeCameraX, computeCameraY } from './core/camera';
-import { FIXED_DT, PLAYER_HEIGHT, PLAYER_WIDTH } from './core/config';
+import { cameraOf } from './core/camera';
+import { FIXED_DT } from './core/config';
 import { createFlow, stepFlow } from './core/flow';
 import { FixedStepper } from './core/loop';
 import { isPortrait, mergeInput } from './core/touch';
@@ -48,12 +48,8 @@ async function start(canvas: HTMLCanvasElement): Promise<void> {
       touch.setConfirmEnabled(flow.phase !== 'playing');
     }
 
-    const { player } = flow.game;
-    renderer.draw(
-      flow,
-      computeCameraX(player.x + PLAYER_WIDTH / 2),
-      computeCameraY(player.y + PLAYER_HEIGHT / 2),
-    );
+    const camera = cameraOf(flow.game);
+    renderer.draw(flow, camera.x, camera.y);
     requestAnimationFrame(frame);
   }
 

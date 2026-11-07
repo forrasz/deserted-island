@@ -1,6 +1,8 @@
 import type { Rect } from './collision';
 import {
   ENEMY_SIZE,
+  HIDDEN_HOLE_WIDTH,
+  HIDDEN_HOLE_X,
   FIXED_DT,
   SEA_X,
   HEADROOM,
@@ -119,6 +121,22 @@ export function validatePlacements(stage: Stage): string[] {
         errors.push(`ザコ敵 ${i}(${e.kind}) がボス ${j} の範囲と重なる`);
       }
     }
+  }
+
+  // 隠し穴(ボーナスステージの入口): 平らな地面の上(穴・崖がない)で、ザコ敵とボスの往復範囲と重ならない
+  const h0 = HIDDEN_HOLE_X;
+  const h1 = HIDDEN_HOLE_X + HIDDEN_HOLE_WIDTH;
+  for (const p of stage.pits) {
+    if (overlapsRange(h0, h1, p.x, p.x + p.w)) errors.push(`隠し穴が穴と重なる: x=${p.x}`);
+  }
+  for (const c of stage.cliffs) {
+    if (overlapsRange(h0, h1, c.x, c.x + c.w)) errors.push(`隠し穴が崖と重なる: x=${c.x}`);
+  }
+  for (const [i, e] of stage.enemies.entries()) {
+    if (overlapsRange(h0, h1, e.left, e.right + ENEMY_SIZE)) errors.push(`隠し穴がザコ敵 ${i} の範囲と重なる`);
+  }
+  for (const [j, b] of stage.bosses.entries()) {
+    if (overlapsRange(h0, h1, b.left, b.right + b.def.w)) errors.push(`隠し穴がボス ${j} の範囲と重なる`);
   }
   return errors;
 }

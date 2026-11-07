@@ -1,6 +1,14 @@
+import { itemRect, type BonusState } from '../core/bonus';
 import { worldToScreen, worldToScreenY } from '../core/camera';
 import type { Rect } from '../core/collision';
 import {
+  BONUS_BANNER_TIME,
+  BONUS_DURATION,
+  BONUS_EXIT_WIDTH,
+  BONUS_GROUND_Y,
+  BONUS_ITEM_SIZE,
+  BONUS_WIDTH as BONUS_WORLD_WIDTH,
+  BONUS_VENTS,
   ENEMY_SIZE,
   PARALLAX_FACTOR,
   PLAYER_MAX_HP,
@@ -63,6 +71,12 @@ export class Renderer {
     this.cameraY = cameraY;
     const { player, bosses, enemies, projectiles, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
 
+    // ボーナスステージの最中は、地下の広間だけを描く
+    if (flow.game.bonus) {
+      this.drawBonus(flow.game.bonus, hp, hitInvuln, cameraX);
+      return;
+    }
+
     // 背景(素材があれば視差つきで横に繰り返す。なければ空色)
     this.drawBackground(cameraX);
 
@@ -108,24 +122,7 @@ export class Renderer {
       }
     }
 
-    // プレイヤー(素材があれば画像、なければ四角形)
-    this.playerFacing = nextFacing(this.playerFacing, player.vx);
-    const playerImg = this.assets.get('player');
-    const playerBox = {
-      x: worldToScreen(player.x, cameraX),
-      y: this.sy(player.y),
-      w: PLAYER_WIDTH,
-      h: PLAYER_HEIGHT,
-    };
-    // 無敵中は点滅(素材の有無に関係なく同じ判定)
-    if (blinkVisible(hitInvuln)) {
-      if (playerImg) {
-        this.drawSprite(playerImg, playerBox, this.playerFacing);
-      } else {
-        ctx.fillStyle = '#d2362b';
-        ctx.fillRect(playerBox.x, playerBox.y, playerBox.w, playerBox.h);
-      }
-    }
+    this.drawPlayer(player, hitInvuln, cameraX);
 
     // HUD(画面座標の固定位置。カメラの影響を受けない)
     this.drawHp(hp);
@@ -146,6 +143,114 @@ export class Renderer {
     if (flow.phase === 'title') this.drawTitle();
     if (flow.phase === 'cleared') this.drawCleared();
     if (flow.phase === 'gameover') this.drawGameOver();
+  }
+
+  /** プレイヤー(素材があれば画像、なければ四角形)。無敵中は点滅する。 */
+  private drawPlayer(player: { x: number; y: number; vx: number }, hitInvuln: number, cameraX: number): void {
+    const { ctx } = this;
+    this.playerFacing = nextFacing(this.playerFacing, player.vx);
+    const playerImg = this.assets.get('player');
+    const playerBox = {
+      x: worldToScreen(player.x, cameraX),
+      y: this.sy(player.y),
+      w: PLAYER_WIDTH,
+      h: PLAYER_HEIGHT,
+    };
+    // 無敵中は点滅(素材の有無に関係なく同じ判定)
+    if (blinkVisible(hitInvuln)) {
+      if (playerImg) {
+        this.drawSprite(playerImg, playerBox, this.playerFacing);
+      } else {
+        ctx.fillStyle = '#d2362b';
+        ctx.fillRect(playerBox.x, playerBox.y, playerBox.w, playerBox.h);
+      }
+    }
+  }
+
+  /** ボーナスステージ(地下の広間)。暗い背景・床・吹き出し口・ハートと石・プレイヤー・HUD。 */
+  private drawBonus(bonus: BonusState, hp: number, hitInvuln: number, cameraX: number): void {
+    const { ctx } = this;
+    ctx.fillStyle = '#241a2e';
+    ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    // 岩壁の模様(カメラに合わせて動く縦縞)
+    ctx.fillStyle = '#2e2240';
+    for (let x = -(cameraX % 240); x < VIEW_WIDTH; x += 240) ctx.fillRect(x, 0, 120, BONUS_GROUND_Y);
+    // 床
+    ctx.fillStyle = '#6b4a2f';
+    ctx.fillRect(0, BONUS_GROUND_Y, VIEW_WIDTH, VIEW_HEIGHT - BONUS_GROUND_Y);
+    ctx.fillStyle = '#8a643f';
+    ctx.fillRect(0, BONUS_GROUND_Y, VIEW_WIDTH, 8);
+    // 吹き出し口
+    ctx.fillStyle = '#120c18';
+    for (const vx of BONUS_VENTS) {
+      const sx = worldToScreen(vx, cameraX);
+      if (sx < -40 || sx > VIEW_WIDTH + 40) continue;
+      ctx.fillRect(sx - 22, BONUS_GROUND_Y, 44, 10);
+    }
+    // ハートと石
+    for (const it of bonus.items) {
+      const r = itemRect(it);
+      const sx = worldToScreen(r.x, cameraX);
+      if (sx + BONUS_ITEM_SIZE < 0 || sx > VIEW_WIDTH) continue;
+      if (it.kind === 'heart') this.drawHeart(sx, r.y);
+      else this.drawStone(sx, r.y);
+    }
+    // 出口(右端)の目印
+    const exitX = worldToScreen(this.bonusExitX(), cameraX);
+    if (exitX < VIEW_WIDTH) {
+      ctx.fillStyle = 'rgba(255, 240, 150, 0.35)';
+      ctx.fillRect(exitX, 0, VIEW_WIDTH - exitX + 40, BONUS_GROUND_Y);
+      this.text('出口', exitX + 6, BONUS_GROUND_Y - 60, 24, 'left', '#fff3a0');
+    }
+
+    this.drawPlayer(bonus.player, hitInvuln, cameraX);
+
+    // HUD
+    this.drawHp(hp);
+    const left = Math.max(0, Math.ceil(BONUS_DURATION - bonus.t));
+    this.text(`ボーナスステージ  のこり ${left} 秒`, VIEW_WIDTH - 16, 12, 26, 'right');
+    if (bonus.stun > 0) this.text('しびれて動けない!', VIEW_WIDTH / 2, 120, 32, 'center', '#ffb347');
+    if (bonus.t < BONUS_BANNER_TIME) {
+      this.text('ボーナスステージ!', VIEW_WIDTH / 2, 170, 64, 'center', '#ffe27a');
+      this.text('ハートでHP回復 / 石はよけろ', VIEW_WIDTH / 2, 250, 28, 'center');
+    }
+  }
+
+  /** 出口の左端(広間のワールド x)。 */
+  private bonusExitX(): number {
+    return BONUS_WORLD_WIDTH - BONUS_EXIT_WIDTH;
+  }
+
+  private drawHeart(x: number, y: number): void {
+    const { ctx } = this;
+    const s = BONUS_ITEM_SIZE;
+    ctx.fillStyle = '#ff4d6d';
+    ctx.strokeStyle = '#7a1230';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + s / 2, y + s);
+    ctx.bezierCurveTo(x - s * 0.2, y + s * 0.5, x + s * 0.1, y - s * 0.1, x + s / 2, y + s * 0.3);
+    ctx.bezierCurveTo(x + s * 0.9, y - s * 0.1, x + s * 1.2, y + s * 0.5, x + s / 2, y + s);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  private drawStone(x: number, y: number): void {
+    const { ctx } = this;
+    const s = BONUS_ITEM_SIZE;
+    ctx.fillStyle = '#8c8c94';
+    ctx.strokeStyle = '#3a3a40';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + s * 0.15, y + s * 0.2);
+    ctx.lineTo(x + s * 0.6, y);
+    ctx.lineTo(x + s, y + s * 0.35);
+    ctx.lineTo(x + s * 0.85, y + s * 0.9);
+    ctx.lineTo(x + s * 0.3, y + s);
+    ctx.lineTo(x, y + s * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 
   /** 画像を当たり判定の矩形(画面座標)に合わせて描く。左向きは左右反転。 */

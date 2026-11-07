@@ -1,3 +1,4 @@
+import { createBonus, exitPlayer, inHiddenHole, stepBonus, type BonusState } from './bonus';
 import { bossRect, createBoss, damageBoss, type Boss } from './boss';
 import { bossFlags, stepBossScript } from './boss-scripts';
 import { overlapAmount, overlaps } from './collision';
@@ -56,6 +57,10 @@ export interface GameState {
   respawn: { x: number; y: number };
   /** 復帰直後の、操作を受け付けない残り時間(秒)。 */
   respawnLock: number;
+  /** ボーナスステージの最中の状態。遊んでいなければ null。ボーナス中は、本編の敵・ボス・弾・部品は止まって保たれる。 */
+  bonus: BonusState | null;
+  /** このプレイでボーナスステージを遊んだか(遊んだあとは、隠し穴は普通の地面)。 */
+  bonusUsed: boolean;
 }
 
 /**
@@ -85,6 +90,8 @@ export function createGame(
     dead: false,
     respawn: { x: player.x, y: player.y },
     respawnLock: 0,
+    bonus: null,
+    bonusUsed: false,
   };
 }
 
@@ -148,6 +155,26 @@ export function stepGame(
   dt: number = FIXED_DT,
   world: WorldBounds = DEFAULT_WORLD,
 ): GameState {
+  // ボーナスステージの最中は、本編を更新せず、広間だけを更新する
+  if (state.bonus) {
+    const r = stepBonus(state.bonus, state.hp, state.hitInvuln, input, dt);
+    if (r.done || r.hp <= 0) {
+      // 退場(死亡のときも、ゲームオーバーの背景として地上へ戻しておく)
+      return {
+        ...state,
+        player: exitPlayer(world),
+        hp: r.hp,
+        hitInvuln: r.hitInvuln,
+        dead: r.hp <= 0,
+        respawn: state.bonus.saved.respawn,
+        respawnLock: 0,
+        bonus: null,
+        bonusUsed: true,
+      };
+    }
+    return { ...state, hp: r.hp, hitInvuln: r.hitInvuln, bonus: r.bonus };
+  }
+
   let prevPlayer = state.player;
   // 復帰直後は、短い間だけ操作を受け付けない(押し続けたキーで、すぐ再び穴へ落ちないように)
   const locked = state.respawnLock > 0;
@@ -247,6 +274,9 @@ export function stepGame(
     finalPlayer = { ...player, x: SEA_X - PLAYER_WIDTH };
   }
 
+  // 隠し穴(中間地点の地面)に立つと、ボーナスステージが始まる(1 回のプレイで 1 回だけ)
+  const enterBonus = !state.bonusUsed && !fell && hp > 0 && inHiddenHole(finalPlayer);
+
   return {
     player: finalPlayer,
     bosses,
@@ -261,5 +291,7 @@ export function stepGame(
     dead: hp <= 0,
     respawn,
     respawnLock,
+    bonus: enterBonus ? createBonus(respawn) : null,
+    bonusUsed: state.bonusUsed,
   };
 }
