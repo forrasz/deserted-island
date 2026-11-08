@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_DEFS, bossRect, createBoss, type Boss } from './boss';
 import { bossFlags, NUSHI_FORM1, NUSHI_FORM2, stepBossScript, type BossCtx } from './boss-scripts';
-import { ctxAt, ticks } from './boss-test-helpers';
+import { ctxAt, finishDying, ticks } from './boss-test-helpers';
 import { createWave } from './projectile';
 import {
   BOSS_RAGE_TIME_SCALE,
@@ -179,6 +179,7 @@ describe('ヌシ: 形態変化(5.2)', () => {
     const b = nushi({ hp: 6 }, 1000, 1000, 1000);
     const s: GameState = {
       ...createGame(undefined, { bosses: [], enemies: [] }),
+      intro: { state: 'done', t: 3 },
       bosses: [b],
       player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
@@ -194,6 +195,7 @@ describe('ヌシ: 形態変化(5.2)', () => {
     const base = createGame(undefined, { bosses: [], enemies: [] });
     let g: GameState = {
       ...base,
+      intro: { state: 'done', t: 3 },
       bosses: [b],
       player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
@@ -279,6 +281,11 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
       player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
+    // 体力が 0 になっても、すぐには撃破されず、部品もまだない(撃破演出)
+    expect(g.bosses[0]!.alive).toBe(true);
+    expect(g.bosses[0]!.dying).toBeGreaterThan(0);
+    expect(g.parts).toHaveLength(0);
+    g = finishDying(g);
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);
     expect(g.parts[0]!.x + 12).toBeCloseTo(1100, 6);
@@ -294,6 +301,8 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
       player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
+    expect(g.projectiles).toHaveLength(0); // 撃破演出が始まると、弾は消える
+    g = finishDying(g);
     expect(g.bosses[0]!.alive).toBe(false);
     for (let i = 0; i < ticks(2) + 10; i++) g = stepGame({ ...g, player: { ...g.player, x: 9000, y: GROUND_Y - H, vy: 0 } }, NO_INPUT, FIXED_DT);
     expect(g.projectiles).toHaveLength(0);
@@ -385,7 +394,9 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
       expect(g.bosses[0]!.hp).toBe(hp);
       b = g.bosses[0]!;
     }
-    expect(b.alive).toBe(false);
+    expect(b.hp).toBe(0);
+    expect(b.alive).toBe(true); // 体力が 0 でも、撃破演出の間は、まだ撃破されていない
+    expect(b.dying).toBeGreaterThan(0);
   });
 
   it('ゲーム内: 気絶していない(休みでも)ヌシは、同じように踏んでも体力は減らず、跳ね返るだけ', () => {
@@ -415,7 +426,7 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
 
   it('撃破時の部品は、かがんだ矩形の中央にドロップする', () => {
     const b = nushi({ stagger: 6, hp: 1, transformed: true, form: 2 }, 1000, 1000, 1000);
-    const g = stepGame(stompState(b), NO_INPUT, FIXED_DT);
+    const g = finishDying(stepGame(stompState(b), NO_INPUT, FIXED_DT));
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);
   });

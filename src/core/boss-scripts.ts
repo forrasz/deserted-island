@@ -178,7 +178,7 @@ export interface BossFlags {
   hidden: boolean;
   /** 転がっていて、踏めない(触れると被弾する)。 */
   stompImmune: boolean;
-  /** 変身中で、踏んでもダメージがなく、触れても被弾しない。 */
+  /** 変身中・撃破演出中で、踏んでもダメージがなく、触れても被弾しない。 */
   harmless: boolean;
   /** 攻撃の予備動作の最中(点滅で示す)。 */
   telegraph: boolean;
@@ -195,7 +195,7 @@ export function bossFlags(b: Boss): BossFlags {
   return {
     hidden: s?.a === 'burrow',
     stompImmune: s?.a === 'roll',
-    harmless: b.transformT > 0,
+    harmless: b.transformT > 0 || b.dying > 0,
     telegraph: s?.a === 'telegraph' && b.transformT <= 0,
     crouch: b.restH !== undefined && b.stagger > 0,
     staggered: b.stagger > 0,
@@ -211,6 +211,13 @@ export function stepBossScript(boss: Boss, ctx: BossCtx, dt: number = FIXED_DT):
   if (!boss.alive) return { boss, spawns: [] };
   const floorY = ctx.groundY - boss.h;
   let b: Boss = { ...boss, invuln: Math.max(0, boss.invuln - dt) };
+
+  // 撃破演出: その場で動かず、攻撃もしない。時間が来たら、撃破される
+  if (b.dying > 0) {
+    const dying = b.dying - dt;
+    if (dying <= 0) return { boss: { ...b, dying: 0, alive: false, vx: 0 }, spawns: [] };
+    return { boss: { ...b, dying, vx: 0 }, spawns: [] };
+  }
 
   // 最終ボスの形態変化: 体力が半分以下になったら、1 回だけ変身に入る
   if (b.kind === 'nushi' && !b.transformed && b.hp <= b.maxHp / 2) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { finishDying } from './boss-test-helpers';
 import { BOSS_DEFS, bossRect, createBoss, type Boss } from './boss';
 import {
   ENEMY_SIZE,
@@ -182,10 +183,12 @@ describe('ボスごとのドロップと部品 10 個', () => {
     let g = world([], bosses);
     for (let k = 0; k < 10; k++) {
       const b = g.bosses[k]!;
-      g = stepGame(
-        { ...g, player: { x: b.x + 20, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false } },
-        NO_INPUT,
-        FIXED_DT,
+      g = finishDying(
+        stepGame(
+          { ...g, player: { x: b.x + 20, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false } },
+          NO_INPUT,
+          FIXED_DT,
+        ),
       );
       expect(g.bosses[k]!.alive).toBe(false);
       expect(g.parts.length + g.partsCollected).toBe(k + 1);
@@ -217,7 +220,7 @@ describe('再プレイでの初期化', () => {
       partsCollected: 4,
       escaped: true,
     };
-    const f = stepFlow({ phase: 'cleared', game: killed, confirmHeld: false, cheat: 0 }, ENTER, FIXED_DT);
+    const f = stepFlow({ phase: 'cleared', game: killed, confirmHeld: false, cheat: 0, ending: 0 }, ENTER, FIXED_DT);
     expect(f.phase).toBe('playing');
     expect(f.game).toEqual(createGame());
     expect(f.game.enemies.every((e) => e.alive)).toBe(true);
@@ -234,7 +237,7 @@ describe('再プレイでの初期化', () => {
       dead: true,
       enemies: g0.enemies.map((e) => ({ ...e, alive: false })),
     };
-    const f = stepFlow({ phase: 'gameover', game: dead, confirmHeld: false, cheat: 0 }, ENTER, FIXED_DT);
+    const f = stepFlow({ phase: 'gameover', game: dead, confirmHeld: false, cheat: 0, ending: 0 }, ENTER, FIXED_DT);
     expect(f.phase).toBe('playing');
     expect(f.game).toEqual(createGame());
   });

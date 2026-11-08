@@ -6,10 +6,13 @@ import { isStomp, playerRect } from './contact';
 import { createEnemy, stepEnemy, type Enemy } from './enemy';
 import { resolveEnemyContact } from './enemy-contact';
 import {
+  DYING_TIME_SCALE,
   FIXED_DT,
   PART_HEIGHT,
   PART_WIDTH,
   HIT_BOUNCE_SPEED,
+  INTRO_TIME,
+  INTRO_TRIGGER_DISTANCE,
   NUSHI_RECOVER_TIME,
   NUSHI_STAGGER_DAMAGE,
   PLAYER_HEIGHT,
@@ -71,6 +74,8 @@ export interface GameState {
   bonus: BonusState | null;
   /** このプレイでボーナスステージを遊んだか(遊んだあとは、隠し穴は普通の地面)。 */
   bonusUsed: boolean;
+  /** ヌシの登場演出の状態。sleeping = ヌシは眠っている、playing = 登場演出の最中(ゲームは止まる)、done = 戦闘中。t は演出の経過時間(秒)。 */
+  intro: { state: 'sleeping' | 'playing' | 'done'; t: number };
   /** 最終ボスの闘技場の柱(壊せる。ボスの突進が当たると壊れ、条件がそろうと再生する)。 */
   pillars: Pillar[];
   /** 無敵モード(隠しコマンド)。オンの間は、敵・弾・石のダメージを受けず、穴に落ちてもHPが減らない。 */
@@ -113,6 +118,7 @@ export function createGame(
     bonus: null,
     bonusUsed: false,
     pillars: (placements.pillars ?? []).map((r) => createPillar(r, pillarCenter(placements))),
+    intro: { state: 'sleeping', t: 0 },
     invincible: false,
   };
 }
@@ -146,7 +152,8 @@ function resolveBossContact(
         ? boss
         : (() => {
             const d = damageBoss(boss, NUSHI_STAGGER_DAMAGE);
-            return { ...d, stagger: d.alive ? NUSHI_RECOVER_TIME : 0 };
+            // 体力が 0 になったとき(撃破演出に入るとき)は、起き上がりの猶予は要らない
+            return { ...d, stagger: d.alive && d.dying <= 0 ? NUSHI_RECOVER_TIME : 0 };
           })()
       : flags.harmless || flags.bounceOnly
         ? boss
@@ -209,6 +216,15 @@ export function stepGame(
     return { ...state, hp: r.hp, hitInvuln: r.hitInvuln, bonus: r.bonus };
   }
 
+  // 撃破演出の間は、ゲームの時間が遅くなる(スローモーション)
+  if (state.bosses.some((b) => b.dying > 0)) dt = dt * DYING_TIME_SCALE;
+
+  // 登場演出の最中は、世界を進めず(入力も受け付けず)、時間だけを進める
+  if (state.intro.state === 'playing') {
+    const t = state.intro.t + dt;
+    return { ...state, intro: t >= INTRO_TIME ? { state: 'done', t: INTRO_TIME } : { state: 'playing', t } };
+  }
+
   // 立っている柱は、プレイヤーにとって通れない地形(崖と同じ)
   const pillarRects = standingPillarRects(state.pillars);
   const baseWorld = world;
@@ -249,6 +265,8 @@ export function stepGame(
   const spawned: Projectile[] = [];
   const pillarPos = pillarEdges(state.pillars);
   const movedBosses = state.bosses.map((b) => {
+    // ヌシは、登場演出が終わるまで眠っていて、動かない
+    if (b.kind === 'nushi' && state.intro.state !== 'done' && b.dying <= 0) return b;
     const playerInside = overlaps(playerRect(movedPlayer), { x: b.x, y: b.y, w: b.w, h: b.h });
     const r = stepBossScript(
       b,
@@ -290,7 +308,9 @@ export function stepGame(
   const enemies = enemyResult.enemies;
   const projResult = resolveProjectileContact(player, movedProjectiles, invulnerable);
   player = projResult.player;
-  const projectiles = projResult.projectiles.filter((p) => p.alive);
+  // 撃破演出が始まった更新で、ボスの弾と衝撃波はすべて消える
+  const dyingStarted = bosses.some((b, i) => b.dying > 0 && state.bosses[i]!.dying <= 0);
+  const projectiles = dyingStarted ? [] : projResult.projectiles.filter((p) => p.alive);
   const hit = bossHit || enemyResult.hit || projResult.hit;
 
   const hp = Math.max(0, state.hp - (fell && !state.invincible ? 1 : 0) - (hit ? 1 : 0));
@@ -350,6 +370,16 @@ export function stepGame(
     dt,
   );
 
+  // 闘技場に近づくと、ヌシの登場演出が始まる(1 回だけ。ヌシが生きているとき)
+  const westPillar = state.pillars.find((p) => p.side === 'west');
+  const intro: GameState['intro'] =
+    state.intro.state === 'sleeping' &&
+    westPillar !== undefined &&
+    bosses.some((b) => b.kind === 'nushi' && b.alive) &&
+    finalPlayer.x + PLAYER_WIDTH >= westPillar.x - INTRO_TRIGGER_DISTANCE
+      ? { state: 'playing', t: 0 }
+      : state.intro;
+
   // 隠し穴(中間地点の地面)に立つと、ボーナスステージが始まる(1 回のプレイで 1 回だけ)
   const enterBonus = !state.bonusUsed && !fell && hp > 0 && inHiddenHole(finalPlayer);
 
@@ -370,6 +400,7 @@ export function stepGame(
     bonus: enterBonus ? createBonus(respawn) : null,
     bonusUsed: state.bonusUsed,
     pillars,
+    intro,
     invincible: state.invincible,
   };
 }

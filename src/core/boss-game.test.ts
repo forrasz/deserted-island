@@ -175,6 +175,7 @@ describe('再プレイでの弾の初期化', () => {
       game: { ...world([], createPlayer(100)), projectiles: [shot], hp: 0, dead: true },
       confirmHeld: false,
       cheat: 0,
+      ending: 0,
     };
     const f = stepFlow(dead, ENTER, FIXED_DT);
     expect(f.phase).toBe('playing');
@@ -189,6 +190,7 @@ describe('再プレイでの弾の初期化', () => {
       game: { ...world([], createPlayer(100)), projectiles: [shot], hp: 0, dead: true },
       confirmHeld: false,
       cheat: 0,
+      ending: 0,
     };
     let f = dead;
     for (let i = 0; i < 60; i++) f = stepFlow(f, NO_INPUT, FIXED_DT);
@@ -197,7 +199,7 @@ describe('再プレイでの弾の初期化', () => {
 
   it('クリア画面の間も、弾が動かない', () => {
     const shot = createShot(1000, GROUND_Y - 48, 260);
-    let f: Flow = { phase: 'cleared', game: { ...world([], createPlayer(100)), projectiles: [shot], escaped: true }, confirmHeld: false, cheat: 0 };
+    let f: Flow = { phase: 'cleared', game: { ...world([], createPlayer(100)), projectiles: [shot], escaped: true }, confirmHeld: false, cheat: 0, ending: 0 };
     for (let i = 0; i < 60; i++) f = stepFlow(f, NO_INPUT, FIXED_DT);
     expect(f.game.projectiles[0]!.x).toBe(shot.x);
   });

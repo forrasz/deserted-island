@@ -1,6 +1,8 @@
 import { BOSS_DEFS, createBoss, type Boss, type BossDef } from './boss';
 import { stepBossScript, type BossCtx, type BossStep } from './boss-scripts';
 import { FIXED_DT, GROUND_Y } from './config';
+import { stepGame, type GameState } from './game';
+import { NO_INPUT } from './input';
 import type { Projectile } from './projectile';
 
 /** テスト用: 通常ボスの定義を土台に、行動の流れだけを差し替えたボスを作る。 */
@@ -30,3 +32,10 @@ export function run(
 }
 
 export const ticks = (seconds: number) => Math.round(seconds / FIXED_DT);
+
+/** 撃破演出(体力 0 のヌシが dying の間)を、終わるまで進める。ゲーム内の時間が 0.3 倍なので、実時間 3.5 秒ぶんの更新が要る。 */
+export function finishDying(g: GameState, maxTicks = 400): GameState {
+  let s = g;
+  for (let i = 0; i < maxTicks && s.bosses.some((b) => b.dying > 0); i++) s = stepGame(s, NO_INPUT, FIXED_DT);
+  return s;
+}

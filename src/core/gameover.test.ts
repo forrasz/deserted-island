@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBoss, type Boss } from './boss';
-import { FIXED_DT, PLAYER_MAX_HP, PLAYER_WIDTH, RAFT_PARTS_REQUIRED, SEA_X } from './config';
+import { ENDING_DURATION, FIXED_DT, PLAYER_MAX_HP, PLAYER_WIDTH, RAFT_PARTS_REQUIRED, SEA_X } from './config';
 import { createFlow, stepFlow, type Flow } from './flow';
 import { createGame, type GameState } from './game';
 import { NO_INPUT, type InputState } from './input';
@@ -14,7 +14,7 @@ function stillBoss(x = 1000, over: Partial<Boss> = {}): Boss {
 }
 
 function playing(game: Partial<GameState>, confirmHeld = false): Flow {
-  return { phase: 'playing', game: { ...createGame(), ...game }, confirmHeld, cheat: 0 };
+  return { phase: 'playing', game: { ...createGame(), ...game }, confirmHeld, cheat: 0, ending: 0 };
 }
 
 /** ボスの左側から接触して被弾する状態(HPを指定)。 */
@@ -49,8 +49,10 @@ function cleared(): Flow {
     RIGHT,
     300,
   );
-  expect(f.phase).toBe('cleared');
-  return stepFlow(f, NO_INPUT, FIXED_DT);
+  expect(f.phase).toBe('ending');
+  const c = run(f, NO_INPUT, Math.round(ENDING_DURATION * 60) + 2);
+  expect(c.phase).toBe('cleared');
+  return stepFlow(c, NO_INPUT, FIXED_DT);
 }
 
 describe('ゲームオーバーへの遷移', () => {
@@ -97,7 +99,7 @@ describe('ゲームオーバーへの遷移', () => {
     );
     expect(f.game.escaped).toBe(true);
     expect(f.game.dead).toBe(true);
-    expect(f.phase).toBe('cleared');
+    expect(f.phase).toBe('ending'); // クリアが優先される(エンディングへ進む)
   });
 });
 

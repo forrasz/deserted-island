@@ -1,3 +1,4 @@
+import { finishDying } from './boss-test-helpers';
 import { describe, expect, it } from 'vitest';
 import { BOSS_DEFS, bossRect, createBoss, type Boss } from './boss';
 import { FIXED_DT, GROUND_Y, PART_HEIGHT, PART_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH } from './config';
@@ -58,7 +59,7 @@ describe('大型のボス(最終ボス)の大きさ', () => {
   it('撃破したとき、部品は大型のボスの中央(幅 200・高さ 250 の中心)にドロップする', () => {
     const b = bigBoss(1000, { hp: 1, transformed: true, form: 2, stagger: 6 }); // 変身は済んでいて、気絶している状態
     const p: Player = { x: 1090, y: b.y + 150 - H - 5, vx: 0, vy: 300, onGround: false }; // かがんだ上辺(地面から 100)
-    const g = stepGame(world(b, p), NO_INPUT, FIXED_DT);
+    const g = finishDying(stepGame(world(b, p), NO_INPUT, FIXED_DT));
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);
     const part = g.parts[0]!;

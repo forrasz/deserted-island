@@ -4,6 +4,7 @@ import {
   BOSS_MAX_HP,
   BOSS_PATROL_LEFT,
   BOSS_PATROL_RIGHT,
+  NUSHI_DYING_TIME,
   BOSS_SPEED,
   BOSS_START_X,
   BOSS_WIDTH,
@@ -130,6 +131,8 @@ export interface Boss {
   transformed: boolean;
   /** 気絶の残り時間(秒)。0 より大きい間は気絶中(最終ボスが突進で柱にぶつかったとき)。 */
   stagger: number;
+  /** 撃破演出の残り時間(ゲーム内の秒)。0 より大きい間は、体力が 0 でも、まだ撃破されていない(最終ボスだけ)。 */
+  dying: number;
 }
 
 export function createBoss(
@@ -168,6 +171,7 @@ export function createBoss(
     transformT: 0,
     transformed: false,
     stagger: 0,
+    dying: 0,
   };
 }
 
@@ -200,5 +204,9 @@ export function stepBoss(boss: Boss, dt: number = FIXED_DT): Boss {
 export function damageBoss(boss: Boss, amount = 1): Boss {
   if (!boss.alive || boss.invuln > 0) return boss;
   const hp = Math.max(0, boss.hp - amount);
+  // 最終ボスは、体力が 0 になってもすぐには撃破されず、撃破演出に入る
+  if (hp <= 0 && boss.kind === 'nushi') {
+    return { ...boss, hp: 0, invuln: BOSS_INVULN_TIME, alive: true, stagger: 0, dying: NUSHI_DYING_TIME };
+  }
   return { ...boss, hp, invuln: BOSS_INVULN_TIME, alive: hp > 0 };
 }

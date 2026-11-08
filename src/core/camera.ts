@@ -1,4 +1,5 @@
 import { BONUS_HEIGHT, BONUS_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH, VIEW_HEIGHT, VIEW_WIDTH, WORLD_HEIGHT, WORLD_WIDTH } from './config';
+import { introCameraBlend } from './cinematic';
 import type { GameState } from './game';
 
 /** プレイヤー中心にカメラ x を決め、ワールド範囲 [0, worldWidth - viewWidth] に収める。 */
@@ -42,5 +43,13 @@ export function cameraOf(game: GameState): { x: number; y: number } {
       y: computeCameraY(cy, VIEW_HEIGHT, BONUS_HEIGHT),
     };
   }
-  return { x: computeCameraX(cx), y: computeCameraY(cy) };
+  const player = { x: computeCameraX(cx), y: computeCameraY(cy) };
+  // ヌシの登場演出の間は、ヌシへ寄って、終わりにプレイヤーへ戻る
+  const boss = game.intro.state === 'playing' ? game.bosses.find((b) => b.kind === 'nushi') : undefined;
+  if (boss) {
+    const k = introCameraBlend(game.intro.t);
+    const target = { x: computeCameraX(boss.x + boss.w / 2), y: computeCameraY(boss.y + boss.h / 2) };
+    return { x: player.x + (target.x - player.x) * k, y: player.y + (target.y - player.y) * k };
+  }
+  return player;
 }

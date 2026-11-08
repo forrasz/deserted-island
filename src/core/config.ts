@@ -203,3 +203,15 @@ export const NUSHI_STAGGER_DAMAGE = 4;
 export const NUSHI_RECOVER_TIME = 0.5;
 /** 壊れた柱が、再び立てるようになるまでの時間(秒)。 */
 export const PILLAR_REGROW_TIME = 8;
+
+// --- ラスボスの演出(登場・撃破・エンディング) ---
+/** プレイヤーの右辺が、西の柱の左辺のこの距離(px)手前に達すると、ヌシの登場演出が始まる。 */
+export const INTRO_TRIGGER_DISTANCE = 360;
+/** 登場演出の長さ(秒)。この間、ゲームは止まる。 */
+export const INTRO_TIME = 3;
+/** 撃破演出の長さ(ゲーム内の秒)。DYING_TIME_SCALE をかけて進むので、実時間は NUSHI_DYING_TIME / DYING_TIME_SCALE = 3.5 秒。 */
+export const NUSHI_DYING_TIME = 1.05;
+/** 撃破演出の間の、ゲームの時間の倍率(スローモーション)。 */
+export const DYING_TIME_SCALE = 0.3;
+/** エンディングの長さ(秒)。 */
+export const ENDING_DURATION = 12;

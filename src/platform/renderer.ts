@@ -1,4 +1,14 @@
 import { itemRect, type BonusState } from '../core/bonus';
+import {
+  dyingBlinkWhite,
+  dyingBossVisible,
+  dyingFlash,
+  dyingProgress,
+  dyingShake,
+  endingScene,
+  explosions,
+  introTimeline,
+} from '../core/cinematic';
 import { worldToScreen, worldToScreenY } from '../core/camera';
 import type { Rect } from '../core/collision';
 import {
@@ -68,6 +78,38 @@ export class Renderer {
   }
 
   draw(flow: Flow, cameraX: number, cameraY: number = WORLD_HEIGHT - VIEW_HEIGHT): void {
+    const { ctx } = this;
+    // エンディングは、本編を描かず、専用の絵を描く
+    if (flow.phase === 'ending') {
+      this.drawEnding(flow.ending);
+      return;
+    }
+    // 演出の画面の揺れ(登場演出・撃破演出)。揺れるのは世界とHUD。暗転・文字・フラッシュは、揺らさない
+    let shakeX = 0;
+    let shakeY = 0;
+    const intro = flow.game.intro;
+    if (intro.state === 'playing') {
+      const tl = introTimeline(intro.t);
+      shakeX = tl.shakeX;
+      shakeY = tl.shakeY;
+    }
+    const dyingBoss = flow.game.bosses.find((b) => b.dying > 0);
+    if (dyingBoss) {
+      const sh = dyingShake(dyingProgress(dyingBoss.dying));
+      shakeX = sh.x;
+      shakeY = sh.y;
+    }
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    this.drawScene(flow, cameraX, cameraY);
+    ctx.restore();
+    this.drawCinematicEffects(flow, dyingBoss?.dying);
+    if (flow.phase === 'title') this.drawTitle(flow.game.invincible);
+    if (flow.phase === 'cleared') this.drawCleared();
+    if (flow.phase === 'gameover') this.drawGameOver();
+  }
+
+  private drawScene(flow: Flow, cameraX: number, cameraY: number): void {
     const { ctx } = this;
     this.cameraY = cameraY;
     const { player, bosses, enemies, projectiles, parts, partsCollected, raftComplete, hp, hitInvuln } = flow.game;
@@ -144,10 +186,6 @@ export class Renderer {
     if (!raftComplete && player.x + PLAYER_WIDTH >= SEA_X - 1) {
       this.text('イカダがないと海へは出られない…', VIEW_WIDTH / 2, 150, 28, 'center');
     }
-
-    if (flow.phase === 'title') this.drawTitle(flow.game.invincible);
-    if (flow.phase === 'cleared') this.drawCleared();
-    if (flow.phase === 'gameover') this.drawGameOver();
   }
 
   /** プレイヤー(素材があれば画像、なければ四角形)。無敵中は点滅する。 */
@@ -388,6 +426,31 @@ export class Renderer {
       return;
     }
 
+    // 撃破演出: 体が白と元の色で光り、爆発が重なる。フラッシュの頂点で消える
+    if (boss.dying > 0) {
+      const p = dyingProgress(boss.dying);
+      if (dyingBossVisible(p)) {
+        ctx.fillStyle = dyingBlinkWhite(boss.dying) ? '#ffffff' : boss.color;
+        ctx.fillRect(bx, top, boss.w, bh);
+        ctx.fillStyle = '#111111';
+        ctx.fillRect(bx + boss.w * 0.3, top + bh * 0.2, 16, 6);
+        ctx.fillRect(bx + boss.w * 0.62, top + bh * 0.2, 16, 6);
+      }
+      for (const e of explosions(p)) {
+        const cx = bx + e.x * boss.w;
+        const cy = top + e.y * bh;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, e.r);
+        g.addColorStop(0, `rgba(255,255,220,${e.alpha})`);
+        g.addColorStop(0.45, `rgba(255,${Math.round(200 - 120 * e.u)},40,${e.alpha * 0.9})`);
+        g.addColorStop(1, `rgba(200,40,20,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx, cy, e.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+
     // 点滅: 予備動作(白と元の色)、変身中(赤と白)
     const flash = Math.floor(Math.max(boss.t, 0) / 0.08) % 2 === 0;
     const transformFlash = boss.transformT > 0 && Math.floor(boss.transformT / 0.08) % 2 === 0;
@@ -608,6 +671,153 @@ export class Renderer {
     ctx.fillRect(rx, ry, 100, 14);
     ctx.fillStyle = '#5c3a1a';
     for (let i = 1; i < 5; i++) ctx.fillRect(rx + i * 20 - 1, ry, 2, 14);
+  }
+
+  /** 登場演出(暗転・WARNING・名前)と、撃破演出の白いフラッシュ。画面に固定で、揺らさない。 */
+  private drawCinematicEffects(flow: Flow, dying: number | undefined): void {
+    const { ctx } = this;
+    const intro = flow.game.intro;
+    if (intro.state === 'playing') {
+      const tl = introTimeline(intro.t);
+      ctx.fillStyle = `rgba(0, 0, 0, ${tl.dark})`;
+      ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+      if (tl.warning) {
+        ctx.fillStyle = 'rgba(170, 0, 0, 0.55)';
+        ctx.fillRect(0, 110, VIEW_WIDTH, 8);
+        ctx.fillRect(0, 232, VIEW_WIDTH, 8);
+        this.text('WARNING', VIEW_WIDTH / 2, 130, 84, 'center', '#ff3b30');
+      }
+      if (tl.nameAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = tl.nameAlpha;
+        this.text('ヌシ', VIEW_WIDTH / 2, 290, 110, 'center', '#ffe0d0');
+        ctx.restore();
+      }
+    }
+    if (dying !== undefined) {
+      const f = dyingFlash(dyingProgress(dying));
+      if (f > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${f})`;
+        ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+      }
+    }
+  }
+
+  /** エンディング: 夕焼けの水平線を、イカダに乗ったプレイヤーが遠ざかる。 */
+  private drawEnding(t: number): void {
+    const { ctx } = this;
+    const s = endingScene(t);
+    const W = VIEW_WIDTH;
+    const H = VIEW_HEIGHT;
+
+    // 空(紫 → 橙 → 水平線の近くの明るい橙)
+    const sky = ctx.createLinearGradient(0, 0, 0, s.horizonY);
+    sky.addColorStop(0, '#3a2a6e');
+    sky.addColorStop(0.55, '#d9644a');
+    sky.addColorStop(1, '#ffc27a');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, s.horizonY);
+
+    // 夕日と、そのまわりの光
+    const glow = ctx.createRadialGradient(s.sunX, s.sunY, s.sunR * 0.5, s.sunX, s.sunY, s.sunR * 4);
+    glow.addColorStop(0, 'rgba(255, 220, 150, 0.7)');
+    glow.addColorStop(1, 'rgba(255, 160, 90, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, s.horizonY);
+    ctx.fillStyle = '#ffe7a6';
+    ctx.beginPath();
+    ctx.arc(s.sunX, s.sunY, s.sunR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 遠ざかる島(水平線の上のシルエット)
+    ctx.save();
+    ctx.globalAlpha = s.islandAlpha;
+    ctx.fillStyle = '#25193a';
+    const iw = 170 * s.islandScale;
+    const ih = 62 * s.islandScale;
+    ctx.beginPath();
+    ctx.moveTo(s.islandX - iw / 2, s.horizonY);
+    ctx.quadraticCurveTo(s.islandX, s.horizonY - ih * 1.6, s.islandX + iw / 2, s.horizonY);
+    ctx.closePath();
+    ctx.fill();
+    // ヤシの木
+    ctx.fillRect(s.islandX + iw * 0.1, s.horizonY - ih * 1.45, 3 * s.islandScale + 1, ih * 0.9);
+    ctx.beginPath();
+    ctx.arc(s.islandX + iw * 0.1 + 1, s.horizonY - ih * 1.45, 14 * s.islandScale + 1, Math.PI, 0);
+    ctx.fill();
+    ctx.restore();
+
+    // 海(水平線の橙 → 手前の濃い青)
+    const sea = ctx.createLinearGradient(0, s.horizonY, 0, H);
+    sea.addColorStop(0, '#e08a58');
+    sea.addColorStop(0.35, '#7a4a6a');
+    sea.addColorStop(1, '#241f4a');
+    ctx.fillStyle = sea;
+    ctx.fillRect(0, s.horizonY, W, H - s.horizonY);
+
+    // 夕日の照り返し(縦に並ぶ光の筋。波でゆれる)
+    for (let i = 0; i < 9; i++) {
+      const y = s.horizonY + 6 + i * 16;
+      const w = (70 - i * 5) * (1 + 0.15 * Math.sin(s.wave * 2 + i));
+      ctx.fillStyle = `rgba(255, 220, 150, ${0.5 - i * 0.045})`;
+      ctx.fillRect(s.sunX - w / 2 + 5 * Math.sin(s.wave * 1.5 + i), y, w, 4);
+    }
+
+    // 波の線(ゆっくり動く)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.lineWidth = 2;
+    for (let row = 0; row < 7; row++) {
+      const y = s.horizonY + 24 + row * 34;
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 16) {
+        const yy = y + 3 * Math.sin(x * 0.03 + s.wave * 1.2 + row);
+        if (x === 0) ctx.moveTo(x, yy);
+        else ctx.lineTo(x, yy);
+      }
+      ctx.stroke();
+    }
+
+    // イカダとプレイヤー(ゆっくり上下にゆれる)
+    const k = s.raftScale;
+    const bob = 3 * Math.sin(s.wave * 2) * k;
+    const rx = s.raftX;
+    const ry = s.raftY + bob;
+    ctx.fillStyle = '#8a5a2b';
+    ctx.fillRect(rx - 70 * k, ry - 4 * k, 140 * k, 16 * k);
+    ctx.fillStyle = '#6b431e';
+    for (let i = 1; i < 5; i++) ctx.fillRect(rx - 70 * k + i * 28 * k, ry - 4 * k, 2 * k + 0.5, 16 * k);
+    ctx.fillStyle = '#d2362b';
+    ctx.fillRect(rx - 10 * k, ry - 4 * k - 34 * k, 20 * k, 34 * k); // 立っているプレイヤー
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(rx - 5 * k, ry - 4 * k - 26 * k, 4 * k + 0.5, 5 * k + 0.5);
+    ctx.fillRect(rx + 2 * k, ry - 4 * k - 26 * k, 4 * k + 0.5, 5 * k + 0.5);
+
+    // 鳥(小さな V 字)
+    ctx.strokeStyle = '#2a1a3a';
+    ctx.lineWidth = 2;
+    for (const b of s.birds) {
+      const up = 6 * b.flap;
+      ctx.beginPath();
+      ctx.moveTo(b.x - 10, b.y - up);
+      ctx.quadraticCurveTo(b.x - 4, b.y - up - 4, b.x, b.y);
+      ctx.quadraticCurveTo(b.x + 4, b.y - up - 4, b.x + 10, b.y - up);
+      ctx.stroke();
+    }
+
+    // メッセージ(静かに現れて、消える)
+    for (const m of s.messages) {
+      if (m.alpha <= 0.01) continue;
+      ctx.save();
+      ctx.globalAlpha = m.alpha;
+      this.text(m.text, W / 2, 56, 30, 'center', '#fff3e0');
+      ctx.restore();
+    }
+
+    // 終わりの暗転
+    if (s.fadeOut > 0) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${s.fadeOut * 0.6})`;
+      ctx.fillRect(0, 0, W, H);
+    }
   }
 
   private overlay(): void {

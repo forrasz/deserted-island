@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bossRect, BOSS_DEFS, createBoss, type Boss } from './boss';
 import { bossFlags, NUSHI_FORM1, stepBossScript, type BossCtx } from './boss-scripts';
-import { ticks } from './boss-test-helpers';
+import { finishDying, ticks } from './boss-test-helpers';
 import type { Rect } from './collision';
 import {
   FIXED_DT,
@@ -206,6 +206,7 @@ function arena(over: Partial<GameState> = {}, boss: Boss = nushiAt()): GameState
     ...createGame(undefined, { bosses: [], enemies: [], pillars: STAGE.pillars }),
     // ヌシの範囲から、柱の西・東を決めるため、ヌシの配置を渡して作った柱を使う
     pillars: createGame().pillars,
+    intro: { state: 'done', t: 3 }, // 登場演出は済んだ状態から始める
     bosses: [boss],
     player: { ...westSpot },
     ...over,
@@ -321,6 +322,8 @@ describe('柱を使った戦い(game)', () => {
       if (g.bosses[0]!.alive) g = run({ ...g, player: { ...westSpot } }, ticks(2));
     }
     expect(hps).toEqual([8, 4, 0]);
+    expect(g.bosses[0]!.alive).toBe(true); // 撃破演出の間
+    g = finishDying(g);
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts.length + g.partsCollected).toBe(1);
     expect(g.pillars.every((p) => !p.alive)).toBe(true);

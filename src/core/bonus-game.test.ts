@@ -141,14 +141,14 @@ describe('石でHPが 0 になる(Flow)', () => {
   }
 
   it('HPが 1 のとき石に当たると、ゲームオーバーになる', () => {
-    const flow: Flow = { phase: 'playing', game: stoneOnPlayer(1), confirmHeld: false, cheat: 0 };
+    const flow: Flow = { phase: 'playing', game: stoneOnPlayer(1), confirmHeld: false, cheat: 0, ending: 0 };
     const next = stepFlow(flow, NO_INPUT, FIXED_DT);
     expect(next.phase).toBe('gameover');
     expect(next.game.hp).toBe(0);
   });
 
   it('HPが 2 なら、プレイが続き、HPは 1 で、無敵になる', () => {
-    const flow: Flow = { phase: 'playing', game: stoneOnPlayer(2), confirmHeld: false, cheat: 0 };
+    const flow: Flow = { phase: 'playing', game: stoneOnPlayer(2), confirmHeld: false, cheat: 0, ending: 0 };
     const next = stepFlow(flow, NO_INPUT, FIXED_DT);
     expect(next.phase).toBe('playing');
     expect(next.game.hp).toBe(1);
@@ -156,7 +156,7 @@ describe('石でHPが 0 になる(Flow)', () => {
   });
 
   it('ボーナスを遊んだあとでも、やり直すと未使用に戻る', () => {
-    const flow: Flow = { phase: 'playing', game: stoneOnPlayer(1), confirmHeld: false, cheat: 0 };
+    const flow: Flow = { phase: 'playing', game: stoneOnPlayer(1), confirmHeld: false, cheat: 0, ending: 0 };
     const over = stepFlow(flow, NO_INPUT, FIXED_DT);
     expect(over.game.bonusUsed).toBe(true);
     const again = stepFlow(over, { ...NO_INPUT, confirm: true }, FIXED_DT);

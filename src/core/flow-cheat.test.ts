@@ -8,11 +8,11 @@ import { NO_INPUT } from './input';
 const ENTER = { ...NO_INPUT, confirm: true };
 
 function playing(over: Partial<Flow> = {}): Flow {
-  return { phase: 'playing', game: createGame(), confirmHeld: false, cheat: 0, ...over };
+  return { phase: 'playing', game: createGame(), confirmHeld: false, cheat: 0, ending: 0, ...over };
 }
 
 function withPhase(phase: 'cleared' | 'gameover'): Flow {
-  return { phase, game: { ...createGame(), escaped: phase === 'cleared', dead: phase === 'gameover' }, confirmHeld: false, cheat: 0 };
+  return { phase, game: { ...createGame(), escaped: phase === 'cleared', dead: phase === 'gameover' }, confirmHeld: false, cheat: 0, ending: 0 };
 }
 
 describe('隠しコマンドの受付(Flow)', () => {

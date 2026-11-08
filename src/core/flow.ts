@@ -1,9 +1,9 @@
 import { advanceCodes } from './cheat';
-import { FIXED_DT } from './config';
+import { ENDING_DURATION, FIXED_DT } from './config';
 import { createGame, stepGame, type GameState } from './game';
 import type { InputState } from './input';
 
-export type Phase = 'title' | 'playing' | 'cleared' | 'gameover';
+export type Phase = 'title' | 'playing' | 'ending' | 'cleared' | 'gameover';
 
 export interface Flow {
   phase: Phase;
@@ -13,10 +13,12 @@ export interface Flow {
   confirmHeld: boolean;
   /** 隠しコマンドの進み具合(次に期待するキーの位置)。画面が変わると 0 に戻る。 */
   cheat: number;
+  /** エンディングの経過時間(秒)。phase が ending の間だけ進む。 */
+  ending: number;
 }
 
 export function createFlow(): Flow {
-  return { phase: 'title', game: createGame(), confirmHeld: false, cheat: 0 };
+  return { phase: 'title', game: createGame(), confirmHeld: false, cheat: 0, ending: 0 };
 }
 
 /**
@@ -47,19 +49,34 @@ export function stepFlow(
     case 'title':
       // タイトルで入力した無敵モードは、始まるプレイへ引き継ぐ
       if (pressed) {
-        return { phase: 'playing', game: { ...createGame(), invincible: game.invincible }, confirmHeld, cheat: 0 };
+        return {
+          phase: 'playing',
+          game: { ...createGame(), invincible: game.invincible },
+          confirmHeld,
+          cheat: 0,
+          ending: 0,
+        };
       }
       break;
     case 'cleared':
     case 'gameover':
       // やり直しでは、無敵モードはオフに戻る
-      if (pressed) return { phase: 'playing', game: createGame(), confirmHeld, cheat: 0 };
+      if (pressed) return { phase: 'playing', game: createGame(), confirmHeld, cheat: 0, ending: 0 };
       break;
     case 'playing': {
       const next = stepGame(game, input, dt);
       // 同じ更新で脱出とHP 0 が重なった場合は、クリアを優先する
-      const phase: Phase = next.escaped ? 'cleared' : next.dead ? 'gameover' : 'playing';
-      return { phase, game: next, confirmHeld, cheat: phase === 'playing' ? cheat : 0 };
+      // 脱出に成功したら、エンディングを見せてから、クリア画面へ進む
+      const phase: Phase = next.escaped ? 'ending' : next.dead ? 'gameover' : 'playing';
+      return { phase, game: next, confirmHeld, cheat: phase === 'playing' ? cheat : 0, ending: 0 };
+    }
+    case 'ending': {
+      // エンディングの間は、どの入力も受け付けず(スキップできない)、世界も進めない
+      const ending = flow.ending + dt;
+      if (ending >= ENDING_DURATION - 1e-9) {
+        return { phase: 'cleared', game, confirmHeld, cheat: 0, ending: ENDING_DURATION };
+      }
+      return { ...flow, confirmHeld, cheat: 0, ending };
     }
   }
 
