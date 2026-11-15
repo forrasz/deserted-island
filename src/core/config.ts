@@ -32,6 +32,8 @@ export const MAX_FALL_SPEED = 1500;
 
 export const PLAYER_WIDTH = 40;
 export const PLAYER_HEIGHT = 56;
+/** スプライトシートのプレイヤーの、表示の高さ(待機のコマの高さ。当たり判定の矩形 56 より少し大きい)。当たり判定は変えない。 */
+export const PLAYER_DISPLAY_HEIGHT = 70;
 /** 被弾判定(ザコ敵・弾・衝撃波との重なり)の大きさ。見た目より小さく、下辺と左右の中心をそろえる。踏みつけ・地形・部品には、見た目の矩形を使う。 */
 export const PLAYER_HURT_WIDTH = 28;
 export const PLAYER_HURT_HEIGHT = 46;

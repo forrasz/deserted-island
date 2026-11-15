@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import readme from '../../public/assets/README.md?raw';
-import { ASSET_FILES, ASSET_KEYS } from './assets';
+import { ASSET_FILES, ASSET_KEYS, PLAYER_SHEET_JSON, PLAYER_SHEET_PNG } from './assets';
 
 describe('素材の定義', () => {
   it('プレイヤー・ボス・部品・イカダ・背景・地面・海の 7 つのキーがある', () => {
@@ -38,9 +38,15 @@ describe('素材の仕様書き(public/assets/README.md)', () => {
     expect(readme).toContain('継ぎ目');
   });
 
+  it('README に、プレイヤーのスプライトシートと、コマの一覧のファイル名・動きの名前が記載されている', () => {
+    expect(readme).toContain(PLAYER_SHEET_PNG);
+    expect(readme).toContain(PLAYER_SHEET_JSON);
+    for (const clip of ['idle', 'walk', 'run', 'jump', 'landStill', 'landRun', 'hit', 'knockout']) expect(readme).toContain(clip);
+  });
+
   it('README に記載された PNG のファイル名は、定義にあるものだけである', () => {
     const mentioned = new Set(readme.match(/[a-z]+\.png/g) ?? []);
-    const defined = new Set(ASSET_KEYS.map((k) => ASSET_FILES[k]));
+    const defined = new Set<string>([...ASSET_KEYS.map((k) => ASSET_FILES[k]), PLAYER_SHEET_PNG]);
     for (const name of mentioned) expect(defined.has(name)).toBe(true);
   });
 });

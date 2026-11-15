@@ -30,6 +30,7 @@ import {
   RAFT_SPRITE_MARGIN,
   RAFT_SPRITE_WIDTH,
   SEA_X,
+  PLAYER_DISPLAY_HEIGHT,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
   VIEW_HEIGHT,
@@ -43,6 +44,8 @@ import type { Enemy } from '../core/enemy';
 import { ENEMY_DEFS } from '../core/enemy-defs';
 import { nextFacing, type Facing } from '../core/facing';
 import type { Pillar } from '../core/pillar';
+import type { Player } from '../core/player';
+import { initialAnim, stepAnim, type AnimState } from '../core/player-anim';
 import type { Projectile } from '../core/projectile';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
@@ -54,6 +57,9 @@ const MARKER_INTERVAL = 160;
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
   private playerFacing: Facing = 1;
+  /** プレイヤーのアニメーションの状態(描画の経過時間で進める)。 */
+  private anim: AnimState = initialAnim();
+  private lastAnimMs = 0;
   /** ボスごとの向き(停止中は直前の向きを保つ)。 */
   private readonly bossFacings = new Map<number, Facing>();
   /** 描画中のカメラ y(ワールド y を画面 y に変換するのに使う)。 */
@@ -168,7 +174,7 @@ export class Renderer {
       }
     }
 
-    this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible);
+    this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible, flow.game.dead, false);
     if (flow.game.invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
 
     // HUD(画面座標の固定位置。カメラの影響を受けない)
@@ -190,10 +196,12 @@ export class Renderer {
 
   /** プレイヤー(素材があれば画像、なければ四角形)。無敵中は点滅する。 */
   private drawPlayer(
-    player: { x: number; y: number; vx: number },
+    player: Pick<Player, 'x' | 'y' | 'vx' | 'vy' | 'onGround'>,
     hitInvuln: number,
     cameraX: number,
     invincible: boolean,
+    dead: boolean,
+    stunned: boolean,
   ): void {
     const { ctx } = this;
     this.playerFacing = nextFacing(this.playerFacing, player.vx);
@@ -204,9 +212,43 @@ export class Renderer {
       w: PLAYER_WIDTH,
       h: PLAYER_HEIGHT,
     };
+    // スプライトシートが使えるときは、状態に合わせて動きとコマを選び、足元をそろえて描く
+    const sheet = this.assets.playerSheet;
+    if (sheet) {
+      const now = performance.now();
+      const dt = this.lastAnimMs === 0 ? 0 : Math.min(0.1, (now - this.lastAnimMs) / 1000);
+      this.lastAnimMs = now;
+      this.anim = stepAnim(
+        this.anim,
+        { onGround: player.onGround, vx: player.vx, vy: player.vy, dead, hitInvuln, stunned },
+        dt,
+      );
+    }
     // 無敵中は点滅(素材の有無に関係なく同じ判定)
     if (blinkVisible(hitInvuln)) {
-      if (playerImg) {
+      if (sheet) {
+        const frame = sheet.atlas.clips[this.anim.clip][this.anim.frame]!;
+        const k = PLAYER_DISPLAY_HEIGHT / sheet.atlas.referenceHeight;
+        const footX = playerBox.x + playerBox.w / 2;
+        const footY = playerBox.y + playerBox.h;
+        const dw = frame.w * k;
+        const dh = frame.h * k;
+        ctx.save();
+        if (invincible) {
+          // 無敵モード: 金色の光で示す
+          ctx.shadowColor = '#ffd700';
+          ctx.shadowBlur = 10;
+        }
+        ctx.imageSmoothingEnabled = true;
+        if (this.playerFacing === -1) {
+          ctx.translate(footX, 0);
+          ctx.scale(-1, 1);
+          ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, -frame.fx * k, footY - frame.fy * k, dw, dh);
+        } else {
+          ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, footX - frame.fx * k, footY - frame.fy * k, dw, dh);
+        }
+        ctx.restore();
+      } else if (playerImg) {
         this.drawSprite(playerImg, playerBox, this.playerFacing);
         if (invincible) {
           // 画像は色を変えられないので、金色の枠で示す
@@ -257,7 +299,7 @@ export class Renderer {
       this.text('出口', exitX + 6, BONUS_GROUND_Y - 60, 24, 'left', '#fff3a0');
     }
 
-    this.drawPlayer(bonus.player, hitInvuln, cameraX, invincible);
+    this.drawPlayer(bonus.player, hitInvuln, cameraX, invincible, false, bonus.stun > 0);
     if (invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
 
     // HUD
