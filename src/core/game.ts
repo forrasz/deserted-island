@@ -3,7 +3,7 @@ import { bossRect, createBoss, damageBoss, type Boss } from './boss';
 import { bossFlags, stepBossScript, weakPointOf } from './boss-scripts';
 import { overlapAmount, overlaps, type Rect } from './collision';
 import { isStomp, playerRect } from './contact';
-import { createEnemy, stepEnemy, type Enemy } from './enemy';
+import { createEnemy, enemyRect, stepEnemy, type Enemy } from './enemy';
 import { resolveEnemyContact } from './enemy-contact';
 import {
   DYING_TIME_SCALE,
@@ -17,8 +17,7 @@ import {
   IMPACT_SHAKE_TIME,
   IMPACT_TEXT_TIME,
   NUSHI_HIT_INVULN,
-  NUSHI_MOUTH_DAMAGE,
-  NUSHI_STAGGER_DAMAGE,
+  COCONUT_DAMAGE,
   PALM_CANOPY_LOW,
   PALM_DROP_OFFSETS,
   PILLAR_REGROW_TIME,
@@ -358,6 +357,7 @@ export function stepGame(
   let held = state.held;
   let targetFlash = Math.max(0, state.targetFlash - dt);
   const keptThrown: Thrown[] = [];
+  let aliveEnemies = movedEnemies;
   const fallLine = fallYOf(world);
   for (const t0 of state.thrown) {
     const t = stepThrown(t0, dt);
@@ -369,18 +369,37 @@ export function stepGame(
       continue;
     }
     let consumed = false;
+    // ヌシ: 弱点(頭)に当たったときだけダメージ。体に当たったら、ダメージなしで消える
     bosses = bosses.map((b) => {
       if (consumed || b.kind !== 'nushi' || !b.alive) return b;
       const weak = weakPointOf(b);
       if (weak && overlaps(tr, weak.rect)) {
         consumed = true;
         if (b.invuln > 0) return b; // 命中の直後は、続けて当たってもダメージを受けない
-        const d = damageBoss(b, weak.kind === 'stagger' ? NUSHI_STAGGER_DAMAGE : NUSHI_MOUTH_DAMAGE);
+        const d = damageBoss(b, COCONUT_DAMAGE);
         return d.alive && d.dying <= 0 ? { ...d, invuln: NUSHI_HIT_INVULN } : d;
       }
       if (overlaps(tr, bossRect(b))) consumed = true; // 体に当たったら、ダメージなしで消える
       return b;
     });
+    // ザコ敵(隠れていない敵): 1 回で倒れる
+    if (!consumed) {
+      aliveEnemies = aliveEnemies.map((e) => {
+        if (consumed || !e.alive || e.hidden || !overlaps(tr, enemyRect(e))) return e;
+        consumed = true;
+        return { ...e, alive: false };
+      });
+    }
+    // ヌシ以外のボス: 体力 1 のダメージ(無敵時間は既存のとおり)。もぐっている・変身中・撃破演出中は通り抜ける
+    if (!consumed) {
+      bosses = bosses.map((b) => {
+        if (consumed || b.kind === 'nushi' || !b.alive) return b;
+        const f = bossFlags(b);
+        if (f.hidden || f.harmless || !overlaps(tr, bossRect(b))) return b;
+        consumed = true;
+        return damageBoss(b, COCONUT_DAMAGE);
+      });
+    }
     if (!consumed) keptThrown.push(t);
   }
   const thrown = [...keptThrown];
@@ -388,7 +407,7 @@ export function stepGame(
     thrown.push(throwCoconut(player, facing));
     held -= 1;
   }
-  const enemyResult = resolveEnemyContact(prevPlayer, player, movedEnemies, invulnerable);
+  const enemyResult = resolveEnemyContact(prevPlayer, player, aliveEnemies, invulnerable);
   player = enemyResult.player;
   const enemies = enemyResult.enemies;
   const projResult = resolveProjectileContact(player, movedProjectiles, invulnerable);

@@ -170,11 +170,11 @@ describe('闘技場の木(柱)にヌシが突進すると、実が落ちてく�
     return g;
   }
 
-  it('突進が当たった更新で、両方の木の外側に、2 個ずつ(計 4 個)の実が落ち始める', () => {
+  it('突進が当たった更新で、両方の木の外側に、3 個ずつ(計 6 個)の実が落ち始める', () => {
     const before = arena();
     expect(before.coconuts).toHaveLength(0);
     const g = lure(before);
-    expect(g.coconuts).toHaveLength(4);
+    expect(g.coconuts).toHaveLength(6);
     const west = g.coconuts.filter((c) => c.x < WEST.x).map((c) => WEST.x - (c.x + 10));
     const east = g.coconuts.filter((c) => c.x > EAST.x).map((c) => c.x + 10 - (EAST.x + EAST.w));
     expect(west.sort((a, b) => a - b)).toEqual([...PALM_DROP_OFFSETS]);
@@ -196,7 +196,7 @@ describe('闘技場の木(柱)にヌシが突進すると、実が落ちてく�
     expect(g.bosses[0]!.stagger).toBeGreaterThan(0); // まだ気絶中
     g = { ...g, thrown: coconutAtWeak(g.bosses[0]!), player: { ...spot } };
     g = stepGame(g, NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(8);
+    expect(g.bosses[0]!.hp).toBe(11);
   });
 
   it('突進が当たらない間(ヌシが眠っている・往復だけの間)は、実は落ちない', () => {

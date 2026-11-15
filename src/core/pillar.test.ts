@@ -309,18 +309,18 @@ describe('柱を使った戦い(game)', () => {
     expect(g.bosses[0]!.hp).toBe(12);
   });
 
-  it('誘って、ヤシの実を当てる、を 3 回くり返すと、体力 12 のヌシが倒れ、部品が落ち、柱はすべて崩れて、もう立たない(2 回目で変身する)', () => {
-    let g = arena();
+  it('誘って、ヤシの実を当てる、をくり返すと、ヌシが倒れ、部品が落ち、柱はすべて崩れて、もう立たない(体力 6 以下で変身する)', () => {
+    // 体力 3(変身済みの強化形態)から、3 回の気絶で 1 回ずつ当てる
+    let g = arena({}, nushiAt({ hp: 3, transformed: true, form: 2 }));
     const hps: number[] = [];
     for (let round = 0; round < 3; round++) {
       g = lureUntilStagger(g, round % 2 === 0 ? westSpot : eastSpot, 60);
       expect(g.bosses[0]!.stagger).toBeGreaterThan(0);
       g = stompStaggered(g);
       hps.push(g.bosses[0]!.hp);
-      if (round === 0) expect(g.bosses[0]!.transformed).toBe(false);
-      if (g.bosses[0]!.alive) g = run({ ...g, player: { ...westSpot } }, ticks(2));
+      if (g.bosses[0]!.alive && g.bosses[0]!.dying <= 0) g = run({ ...g, player: { ...westSpot } }, ticks(2));
     }
-    expect(hps).toEqual([8, 4, 0]);
+    expect(hps).toEqual([2, 1, 0]);
     expect(g.bosses[0]!.alive).toBe(true); // 撃破演出の間
     g = finishDying(g);
     expect(g.bosses[0]!.alive).toBe(false);
@@ -366,10 +366,10 @@ describe('起き上がり(気絶が解けるとき)', () => {
       );
     expect(bossRect(b).h).toBe(100);
     const first = hit(b);
-    expect(first.bosses[0]!.hp).toBe(8);
+    expect(first.bosses[0]!.hp).toBe(11);
     expect(first.bosses[0]!.stagger).toBeGreaterThan(5.9);
     const second = hit(first.bosses[0]!);
-    expect(second.bosses[0]!.hp).toBe(8); // ダメージなし
+    expect(second.bosses[0]!.hp).toBe(11); // ダメージなし
   });
 
   it('プレイヤーが立った姿の矩形と重なっていると、離れるまで、かがんだまま起き上がらない', () => {

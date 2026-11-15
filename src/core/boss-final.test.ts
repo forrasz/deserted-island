@@ -11,7 +11,7 @@ import {
   PLAYER_HEIGHT,
   STOMP_BOUNCE_SPEED,
   NUSHI_HIT_INVULN,
-  NUSHI_MOUTH_DAMAGE,
+  COCONUT_DAMAGE,
   PLAYER_MAX_HP,
 } from './config';
 import { createGame, stepGame, type GameState } from './game';
@@ -191,8 +191,8 @@ describe('ヌシ: 形態変化(5.2)', () => {
     expect(g.hp).toBe(PLAYER_MAX_HP); // 被弾もしない
   });
 
-  it('体力が 8 の気絶中に、ヤシの実が頭に当たると、体力が 4(6 以下)になり、次の更新で変身に入る', () => {
-    const b = nushi({ hp: 8, stagger: 6 }, 1000, 1000, 1000);
+  it('体力が 7 の気絶中に、ヤシの実が頭に当たると、体力が 6(6 以下)になり、次の更新で変身に入る', () => {
+    const b = nushi({ hp: 7, stagger: 6 }, 1000, 1000, 1000);
     const base = createGame(undefined, { bosses: [], enemies: [] });
     let g: GameState = {
       ...base,
@@ -202,7 +202,7 @@ describe('ヌシ: 形態変化(5.2)', () => {
       thrown: coconutAtWeak(b),
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(4);
+    expect(g.bosses[0]!.hp).toBe(6);
     g = stepGame({ ...g, player: { ...g.player, x: 5000, y: GROUND_Y - H } }, NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.transformT).toBeGreaterThan(0);
     expect(g.bosses[0]!.stagger).toBe(0); // 変身に入るので、気絶は解ける
@@ -380,9 +380,9 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
     thrown: coconutAtWeak(b),
   });
 
-  it('ゲーム内: 気絶中は、ヤシの実が頭に当たると体力が 4 減る(気絶は続き、実は消え、続けては当たらない)', () => {
+  it('ゲーム内: 気絶中は、ヤシの実が頭に当たると体力が 1 減る(気絶は続き、実は消え、続けては当たらない)', () => {
     const g = stepGame(hitState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(8);
+    expect(g.bosses[0]!.hp).toBe(11);
     expect(g.bosses[0]!.stagger).toBeGreaterThan(5.9);
     expect(g.bosses[0]!.invuln).toBeCloseTo(NUSHI_HIT_INVULN - FIXED_DT * 0, 6);
     expect(g.thrown).toHaveLength(0);
@@ -398,10 +398,10 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
 
   it('ゲーム内: 命中の直後(0.3 秒後)の 2 つめは、ダメージを受けず、実は消える', () => {
     let g = stepGame(hitState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(8);
+    expect(g.bosses[0]!.hp).toBe(11);
     for (let i = 0; i < 18; i++) g = stepGame(g, NO_INPUT, FIXED_DT); // 0.3 秒
     g = stepGame({ ...g, thrown: coconutAtWeak(g.bosses[0]!) }, NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(8);
+    expect(g.bosses[0]!.hp).toBe(11);
     expect(g.thrown).toHaveLength(0);
   });
 
@@ -418,7 +418,7 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
     const b = nushi({ step: 4, t: 0.1, aimDir: 1 }, 1000, 1000, 1000); // step 4 = 弾の予備動作
     expect(action(b)).toBe('telegraph');
     const g = stepGame(hitState(b), NO_INPUT, FIXED_DT);
-    expect(g.bosses[0]!.hp).toBe(12 - NUSHI_MOUTH_DAMAGE);
+    expect(g.bosses[0]!.hp).toBe(12 - COCONUT_DAMAGE);
   });
 
   it('ゲーム内: 往復中のヌシには、ヤシの実が当たってもダメージがない(体に当たって消える)', () => {
@@ -442,9 +442,9 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
     expect(g.player.x).toBe(b.x - 30);
   });
 
-  it('ゲーム内: 気絶中の命中 3 回で、体力 12 のヌシが倒れる(撃破演出に入る)', () => {
+  it('ゲーム内: 気絶中の命中 12 回で、体力 12 のヌシが倒れる(撃破演出に入る。6 以下で変身する)', () => {
     let b = nushi({ stagger: 6 }, 1000, 1000, 1000);
-    for (const hp of [8, 4, 0]) {
+    for (let hp = 11; hp >= 0; hp--) {
       const later = b.hp <= 6 ? { transformed: true, form: 2 as const, transformT: 0 } : {};
       const g = stepGame(hitState({ ...b, stagger: 6, invuln: 0, ...later }), NO_INPUT, FIXED_DT);
       expect(g.bosses[0]!.hp).toBe(hp);

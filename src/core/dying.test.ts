@@ -18,7 +18,7 @@ const H = PLAYER_HEIGHT;
 const NUSHI = BOSS_DEFS[9]!;
 
 function nushi(over: Partial<Boss> = {}): Boss {
-  return { ...createBoss(1000, 1000, 1000, GROUND_Y, NUSHI), vx: 0, hp: 4, transformed: true, form: 2, ...over };
+  return { ...createBoss(1000, 1000, 1000, GROUND_Y, NUSHI), vx: 0, hp: 1, transformed: true, form: 2, ...over };
 }
 /** 気絶中のヌシの頭に、ヤシの実が当たる世界(登場演出は済んでいる。踏みつけではダメージを受けない)。 */
 function stompWorld(b: Boss, over: Partial<GameState> = {}): GameState {
@@ -39,7 +39,7 @@ const steps = (g: GameState, n: number): GameState => {
 
 describe('ヌシの撃破演出(boss: 3.1)', () => {
   it('体力が 0 になっても、ヌシは撃破されず、撃破演出に入る(気絶は解ける)', () => {
-    const b = damageBoss({ ...nushi({ stagger: 6, hp: 4 }) }, 4);
+    const b = damageBoss({ ...nushi({ stagger: 6, hp: 1 }) }, 1);
     expect(b.hp).toBe(0);
     expect(b.alive).toBe(true);
     expect(b.dying).toBe(NUSHI_DYING_TIME);
@@ -74,7 +74,7 @@ describe('ヌシの撃破演出(boss: 3.1)', () => {
 });
 
 describe('撃破演出の最中のゲーム(boss: 3.2)', () => {
-  const killed = (): GameState => stepGame(stompWorld(nushi({ stagger: 6, hp: 4 })), NO_INPUT, FIXED_DT);
+  const killed = (): GameState => stepGame(stompWorld(nushi({ stagger: 6, hp: 1 })), NO_INPUT, FIXED_DT);
 
   it('体力が 0 になっても、ヌシはまだ画面にいて、部品はまだない', () => {
     const g = killed();
@@ -104,7 +104,7 @@ describe('撃破演出の最中のゲーム(boss: 3.2)', () => {
   it('演出が始まった更新で、ヌシの弾と衝撃波は消える', () => {
     const shot = createShot(5000, GROUND_Y - 48, 260);
     const wave = createWave(6000, GROUND_Y, 300);
-    const g = stepGame(stompWorld(nushi({ stagger: 6, hp: 4 }), { projectiles: [shot, wave] }), NO_INPUT, FIXED_DT);
+    const g = stepGame(stompWorld(nushi({ stagger: 6, hp: 1 }), { projectiles: [shot, wave] }), NO_INPUT, FIXED_DT);
     expect(g.projectiles).toEqual([]);
   });
 

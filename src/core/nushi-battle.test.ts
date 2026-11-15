@@ -269,7 +269,7 @@ describe('ヌシ戦の通し(柱 → 気絶 → ヤシの実)', () => {
       let g = lureUntilStagger(arena({ invincible }));
       for (let i = 0; i < 30 && g.hitStop > 0; i++) g = stepGame({ ...g, player: { ...westSpot } }, NO_INPUT, FIXED_DT);
       g = stepGame({ ...g, player: { ...westSpot }, thrown: coconutAtWeak(g.bosses[0]!) }, NO_INPUT, FIXED_DT);
-      expect(g.bosses[0]!.hp).toBe(8);
+      expect(g.bosses[0]!.hp).toBe(11);
       expect(g.bosses[0]!.stagger).toBeGreaterThan(0);
     }
   });

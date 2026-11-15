@@ -614,7 +614,7 @@ export class Renderer {
     for (const palm of g.palms) {
       const px = worldToScreen(palm.x, cameraX);
       if (px + 120 < 0 || px - 120 > VIEW_WIDTH) continue;
-      this.drawPalmTree(px, this.sy(GROUND_Y), PALM_CANOPY_LOW, palm.ready, palm.ready);
+      this.drawPalmTree(px, this.sy(GROUND_Y), PALM_CANOPY_LOW, palm.ready ? 1 : 0, palm.ready);
     }
     for (const c of g.coconuts) {
       const r = coconutRect(c);
@@ -733,9 +733,9 @@ export class Renderer {
 
   /**
    * ヤシの木: 少し曲がった幹と、広がる葉、梢の実。height は幹の高さ(地面から梢まで)。
-   * fruit が true なら梢に実を描き、hint が true なら、頭突きできる高さを示す上向きの印(点滅しない)を出す。
+   * fruits は梢の実の数(ステージの木は 1、闘技場の木は 3、実がなっていなければ 0)。hint が true なら、頭突きできる高さを示す上向きの印(点滅しない)を出す。
    */
-  private drawPalmTree(cx: number, groundScreenY: number, height: number, fruit: boolean, hint: boolean): void {
+  private drawPalmTree(cx: number, groundScreenY: number, height: number, fruits: 0 | 1 | 3, hint: boolean): void {
     const { ctx } = this;
     const topY = groundScreenY - height;
     const lean = 16;
@@ -769,9 +769,8 @@ export class Renderer {
       ctx.restore();
     }
     // 実
-    if (fruit) {
-      for (const [dx, dy] of [[-8, 12], [8, 14], [0, 22]] as const) this.drawCoconut(cx + 4 + dx, topY + dy, 8);
-    }
+    const spots: ReadonlyArray<readonly [number, number]> = fruits === 3 ? [[-8, 12], [8, 14], [0, 22]] : fruits === 1 ? [[0, 14]] : [];
+    for (const [dx, dy] of spots) this.drawCoconut(cx + 4 + dx, topY + dy, 8);
     // 頭突きの印(梢の少し下の、幹のわき)
     if (hint) {
       ctx.fillStyle = '#ffeb3b';
@@ -787,7 +786,7 @@ export class Renderer {
   private drawPillar(p: Pillar, cameraX: number): void {
     const x = worldToScreen(p.x, cameraX);
     if (x + p.w < -80 || x > VIEW_WIDTH + 80) return;
-    this.drawPalmTree(x + p.w / 2, this.sy(p.y + p.h), p.h, true, false);
+    this.drawPalmTree(x + p.w / 2, this.sy(p.y + p.h), p.h, 3, false);
   }
 
   /** 弾(黄色の円)・放物線の弾(オレンジの円)・衝撃波(赤い帯)を描く。画面外は描かない。 */

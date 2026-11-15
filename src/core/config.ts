@@ -241,13 +241,12 @@ export const PALM_CANOPY_HIGH = 260;
 /** 地面に置かれたヤシの実が、拾われずに消えるまでの時間(秒)。 */
 export const COCONUT_LIFETIME = 30;
 /** ヌシの突進で、柱(ヤシの木)の外側に落ちる実の、幹の縁からの距離(px)。 */
-export const PALM_DROP_OFFSETS: readonly number[] = [30, 70];
+export const PALM_DROP_OFFSETS: readonly number[] = [30, 70, 110];
 /** 練習用の的の大きさ(px)と、当たったあとに光る時間(秒)。 */
 export const TARGET_SIZE = 40;
 export const TARGET_FLASH_TIME = 0.4;
 /** ヤシの実が頭(弱点)に当たったときの、ヌシの体力の減り方(気絶中 / 口を開けているとき)。命中のあと、続けて当たらない時間(秒)。 */
-export const NUSHI_STAGGER_DAMAGE = 4;
-export const NUSHI_MOUTH_DAMAGE = 2;
+export const COCONUT_DAMAGE = 1;
 export const NUSHI_HIT_INVULN = 0.5;
 /** 強化形態の着地の隙(秒)。この間、口を開けて弱点が現れる。 */
 export const NUSHI_LANDING_OPEN = 0.5;
