@@ -259,6 +259,8 @@ export const THROW_LEAN_DEG = 14;
 export const THROW_PEAK_TIME = 0.08;
 /** 腕を振った弧が見える時間(秒)。 */
 export const THROW_ARC_TIME = 0.15;
+/** 投げた直後に、手元にヤシの実を描く時間(秒)。持っているだけの間は描かない。 */
+export const THROW_HAND_TIME = 0.1;
 /** 投げていないときの、投げてからの経過時間の値(動きが終わっていることを表す大きな値)。 */
 export const THROW_IDLE_T = 99;
 

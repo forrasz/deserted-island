@@ -1,4 +1,4 @@
-import { THROW_ANIM_TIME, THROW_ARC_TIME, THROW_LEAN_DEG, THROW_PEAK_TIME } from './config';
+import { THROW_ANIM_TIME, THROW_ARC_TIME, THROW_HAND_TIME, THROW_LEAN_DEG, THROW_PEAK_TIME } from './config';
 
 /**
  * プレイヤーのアニメーション(スプライトシートのコマ)の定義と、状態からの動き・コマの選択。
@@ -279,9 +279,11 @@ export interface ThrowPose {
   shift: number;
   /** 腕を振った弧の濃さ(0〜1)。 */
   arcAlpha: number;
+  /** 手元にヤシの実を描くか(投げた直後の THROW_HAND_TIME 秒だけ)。 */
+  showCoconut: boolean;
 }
 
-export const NO_THROW_POSE: ThrowPose = { leanDeg: 0, scaleX: 1, scaleY: 1, shift: 0, arcAlpha: 0 };
+export const NO_THROW_POSE: ThrowPose = { leanDeg: 0, scaleX: 1, scaleY: 1, shift: 0, arcAlpha: 0, showCoconut: false };
 
 const easeOut = (u: number): number => 1 - (1 - u) * (1 - u);
 const smooth = (u: number): number => u * u * (3 - 2 * u);
@@ -300,5 +302,6 @@ export function throwPose(t: number): ThrowPose {
     scaleY: 1 - 0.03 * k,
     shift: 4 * k,
     arcAlpha: t < THROW_ARC_TIME ? 0.7 * (1 - t / THROW_ARC_TIME) : 0,
+    showCoconut: t < THROW_HAND_TIME,
   };
 }

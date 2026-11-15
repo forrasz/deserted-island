@@ -15,7 +15,7 @@ import {
   type ClipName,
   type Frame,
 } from './player-anim';
-import { PLAYER_DISPLAY_HEIGHT, PLAYER_FOOT_SINK, THROW_ANIM_TIME, THROW_ARC_TIME, THROW_LEAN_DEG, THROW_PEAK_TIME } from './config';
+import { PLAYER_DISPLAY_HEIGHT, PLAYER_FOOT_SINK, THROW_ANIM_TIME, THROW_ARC_TIME, THROW_HAND_TIME, THROW_LEAN_DEG, THROW_PEAK_TIME } from './config';
 
 // プロジェクトには Node の型定義を入れていない(テストの実行は Node なので、実行時には使える)
 // @ts-expect-error node:fs の型がない
@@ -326,5 +326,15 @@ describe('投げる動き(throwPose)', () => {
     expect(throwPose(THROW_ARC_TIME).arcAlpha).toBe(0);
     expect(throwPose(THROW_ARC_TIME + 0.05).arcAlpha).toBe(0);
   });
-});
 
+  it('手元のヤシの実は、投げた直後の 0.1 秒だけ表示される(0・0.05 秒は表示、0.1・0.2 秒・投げていないときは非表示)', () => {
+    expect(THROW_HAND_TIME).toBe(0.1);
+    expect(throwPose(0).showCoconut).toBe(true);
+    expect(throwPose(0.05).showCoconut).toBe(true);
+    expect(throwPose(0.1).showCoconut).toBe(false);
+    expect(throwPose(0.2).showCoconut).toBe(false);
+    expect(throwPose(99).showCoconut).toBe(false);
+    expect(throwPose(-1).showCoconut).toBe(false);
+    expect(NO_THROW_POSE.showCoconut).toBe(false);
+  });
+});

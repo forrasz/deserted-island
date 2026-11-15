@@ -202,7 +202,6 @@ export class Renderer {
 
     this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible, flow.game.dead, false, {
       throwT: flow.game.throwT,
-      held: flow.game.held,
     });
     this.drawImpact(flow, cameraX);
     if (flow.game.invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
@@ -236,8 +235,8 @@ export class Renderer {
     invincible: boolean,
     dead: boolean,
     stunned: boolean,
-    /** 投げてからの経過時間と手持ちのヤシの実の数(本編のみ。ボーナスの広間では渡さない)。 */
-    thrower?: { throwT: number; held: number },
+    /** 投げてからの経過時間(本編のみ。ボーナスの広間では渡さない)。 */
+    thrower?: { throwT: number },
   ): void {
     const { ctx } = this;
     this.playerFacing = nextFacing(this.playerFacing, player.vx);
@@ -286,8 +285,8 @@ export class Renderer {
         ctx.translate(f * pose.shift, 0);
         ctx.scale(f * pose.scaleX, pose.scaleY);
         ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, -frame.fx * k, -frame.fy * k, dw, dh);
-        if (overlay && thrower.held > 0) {
-          // 手元(進む向きの前側・胸の高さ)のヤシの実。ここでは、+x が進む向き
+        if (pose.showCoconut) {
+          // 投げた直後だけ、手元(進む向きの前側・胸の高さ)にヤシの実を描く。ここでは、+x が進む向き
           this.drawCoconut(THROW_HAND_X, -PLAYER_DISPLAY_HEIGHT * THROW_HAND_Y_RATIO, THROW_HAND_R);
         }
         ctx.restore();
