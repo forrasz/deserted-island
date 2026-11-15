@@ -23,6 +23,7 @@ import {
   PILLAR_REGROW_TIME,
   PILLAR_REGROW_TIME_2,
   TARGET_FLASH_TIME,
+  THROW_IDLE_T,
   PLAYER_HEIGHT,
   PLAYER_INVULN_TIME,
   PLAYER_MAX_HP,
@@ -108,6 +109,8 @@ export interface GameState {
   thrown: Thrown[];
   /** 直前の更新で、投げるキーが押されていたか(押した瞬間の判定に使う)。 */
   throwHeld: boolean;
+  /** 投げてからの経過時間(秒。投げた更新で 0)。投げていなければ THROW_IDLE_T。描画が、投げる動きを決めるのに使う。 */
+  throwT: number;
   /** プレイヤーの向き(最後に押した左右。右 = 1)。投げる向きに使う。 */
   facing: 1 | -1;
   /** 練習用の的(なければ null)と、当たったあとに光る残り時間(秒)。 */
@@ -162,6 +165,7 @@ export function createGame(
     held: 0,
     thrown: [],
     throwHeld: false,
+    throwT: THROW_IDLE_T,
     facing: 1,
     target: placements.target ?? null,
     targetFlash: 0,
@@ -403,9 +407,11 @@ export function stepGame(
     if (!consumed) keptThrown.push(t);
   }
   const thrown = [...keptThrown];
+  let threw = false;
   if (input.throw && !state.throwHeld && !locked && held > 0) {
     thrown.push(throwCoconut(player, facing));
     held -= 1;
+    threw = true;
   }
   const enemyResult = resolveEnemyContact(prevPlayer, player, aliveEnemies, invulnerable);
   player = enemyResult.player;
@@ -539,6 +545,7 @@ export function stepGame(
     held,
     thrown,
     throwHeld: input.throw,
+    throwT: threw ? 0 : Math.min(THROW_IDLE_T, state.throwT + dt),
     facing,
     target: state.target,
     targetFlash,

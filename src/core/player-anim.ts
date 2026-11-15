@@ -1,3 +1,5 @@
+import { THROW_ANIM_TIME, THROW_ARC_TIME, THROW_LEAN_DEG, THROW_PEAK_TIME } from './config';
+
 /**
  * プレイヤーのアニメーション(スプライトシートのコマ)の定義と、状態からの動き・コマの選択。
  * 描画の経過時間(実時間)で進める、純粋な状態機械。ゲームの状態(Player など)は増やさず、
@@ -262,5 +264,41 @@ export function stepAnim(s: AnimState, input: AnimInput, dt: number): AnimState 
     hitT,
     landClip,
     landT,
+  };
+}
+
+// ---- 投げる動き(既存のコマを加工して重ねる) ----
+
+export interface ThrowPose {
+  /** 体を進む向きへ傾ける角度(度。0 = 傾けない)。向きが左のときは、描画側で反転する。 */
+  leanDeg: number;
+  /** 横・縦の倍率。 */
+  scaleX: number;
+  scaleY: number;
+  /** 進む向きへのずれ(px)。 */
+  shift: number;
+  /** 腕を振った弧の濃さ(0〜1)。 */
+  arcAlpha: number;
+}
+
+export const NO_THROW_POSE: ThrowPose = { leanDeg: 0, scaleX: 1, scaleY: 1, shift: 0, arcAlpha: 0 };
+
+const easeOut = (u: number): number => 1 - (1 - u) * (1 - u);
+const smooth = (u: number): number => u * u * (3 - 2 * u);
+
+/**
+ * 投げてから t 秒の、投げる動き。0 〜 THROW_PEAK_TIME で前へ傾いて(最大 THROW_LEAN_DEG)少し低く広がり、
+ * THROW_ANIM_TIME までに、なめらかに元へ戻る。t < 0 や THROW_ANIM_TIME 以降は、動きなし。弧は THROW_ARC_TIME で消える。
+ */
+export function throwPose(t: number): ThrowPose {
+  if (t < 0 || t >= THROW_ANIM_TIME) return NO_THROW_POSE;
+  // 傾き・倍率・ずれの強さ(0 → 1 → 0)
+  const k = t < THROW_PEAK_TIME ? easeOut(t / THROW_PEAK_TIME) : 1 - smooth((t - THROW_PEAK_TIME) / (THROW_ANIM_TIME - THROW_PEAK_TIME));
+  return {
+    leanDeg: THROW_LEAN_DEG * k,
+    scaleX: 1 + 0.05 * k,
+    scaleY: 1 - 0.03 * k,
+    shift: 4 * k,
+    arcAlpha: t < THROW_ARC_TIME ? 0.7 * (1 - t / THROW_ARC_TIME) : 0,
   };
 }

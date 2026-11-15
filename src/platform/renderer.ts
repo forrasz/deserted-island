@@ -56,7 +56,7 @@ import { ENEMY_DEFS } from '../core/enemy-defs';
 import { nextFacing, type Facing } from '../core/facing';
 import type { Pillar } from '../core/pillar';
 import type { Player } from '../core/player';
-import { initialAnim, stepAnim, type AnimState } from '../core/player-anim';
+import { initialAnim, NO_THROW_POSE, stepAnim, throwPose, type AnimState } from '../core/player-anim';
 import type { Projectile } from '../core/projectile';
 import type { Flow } from '../core/flow';
 import { fitToBox, parallaxOffset, tileStartX } from '../core/sprite-layout';
@@ -66,6 +66,10 @@ import type { AssetStore } from './assets';
 const MARKER_INTERVAL = 160;
 /** エンディングのプレイヤーの表示の高さ(px。イカダの倍率 1 のとき)と、待機の動きの 1 コマの時間(秒)。 */
 const ENDING_PLAYER_HEIGHT = 90;
+/** 手元のヤシの実: 足元から進む向きへ(px)・高さ(表示の高さに対する割合)・半径(px)。 */
+const THROW_HAND_X = 16;
+const THROW_HAND_Y_RATIO = 0.55;
+const THROW_HAND_R = 7;
 const ENDING_IDLE_PERIOD = 0.15;
 
 export class Renderer {
@@ -196,7 +200,10 @@ export class Renderer {
       }
     }
 
-    this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible, flow.game.dead, false);
+    this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible, flow.game.dead, false, {
+      throwT: flow.game.throwT,
+      held: flow.game.held,
+    });
     this.drawImpact(flow, cameraX);
     if (flow.game.invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
 
@@ -229,6 +236,8 @@ export class Renderer {
     invincible: boolean,
     dead: boolean,
     stunned: boolean,
+    /** 投げてからの経過時間と手持ちのヤシの実の数(本編のみ。ボーナスの広間では渡さない)。 */
+    thrower?: { throwT: number; held: number },
   ): void {
     const { ctx } = this;
     this.playerFacing = nextFacing(this.playerFacing, player.vx);
@@ -267,14 +276,35 @@ export class Renderer {
           ctx.shadowBlur = 10;
         }
         ctx.imageSmoothingEnabled = true;
-        if (this.playerFacing === -1) {
-          ctx.translate(footX, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, -frame.fx * k, footY - frame.fy * k, dw, dh);
-        } else {
-          ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, footX - frame.fx * k, footY - frame.fy * k, dw, dh);
+        // 投げる動き(既存のコマの加工)と、手元のヤシの実。やられ・被弾・石の硬直の間は重ねない
+        const overlay = thrower !== undefined && !dead && !stunned && this.anim.clip !== 'hit' && this.anim.clip !== 'knockout';
+        const pose = overlay ? throwPose(thrower.throwT) : NO_THROW_POSE;
+        const f = this.playerFacing;
+        // 足元を原点に、前へ傾け(左向きは反対)・少し低く広げ・前へずらして、コマを描く(足元は動かない)
+        ctx.translate(footX, footY);
+        ctx.rotate((f * pose.leanDeg * Math.PI) / 180);
+        ctx.translate(f * pose.shift, 0);
+        ctx.scale(f * pose.scaleX, pose.scaleY);
+        ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, -frame.fx * k, -frame.fy * k, dw, dh);
+        if (overlay && thrower.held > 0) {
+          // 手元(進む向きの前側・胸の高さ)のヤシの実。ここでは、+x が進む向き
+          this.drawCoconut(THROW_HAND_X, -PLAYER_DISPLAY_HEIGHT * THROW_HAND_Y_RATIO, THROW_HAND_R);
         }
         ctx.restore();
+        // 腕を振った弧(肩のあたりを中心に、後ろ上から前へ)
+        if (pose.arcAlpha > 0) {
+          ctx.save();
+          ctx.translate(footX, footY - PLAYER_DISPLAY_HEIGHT * 0.6);
+          ctx.scale(f, 1);
+          ctx.translate(8, 0);
+          ctx.strokeStyle = `rgba(255, 255, 255, ${pose.arcAlpha})`;
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.arc(0, 0, 34, -1.9, 0.5);
+          ctx.stroke();
+          ctx.restore();
+        }
       } else if (playerImg) {
         this.drawSprite(playerImg, playerBox, this.playerFacing);
         if (invincible) {

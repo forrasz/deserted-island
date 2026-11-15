@@ -251,6 +251,17 @@ export const NUSHI_HIT_INVULN = 0.5;
 /** 強化形態の着地の隙(秒)。この間、口を開けて弱点が現れる。 */
 export const NUSHI_LANDING_OPEN = 0.5;
 
+// --- 投げる動き(プレイヤーの見た目) ---
+/** 投げてから、投げる動きが続く時間(秒)。 */
+export const THROW_ANIM_TIME = 0.3;
+/** 体を前へ傾ける最大の角度(度)と、最大に達するまでの時間(秒)。 */
+export const THROW_LEAN_DEG = 14;
+export const THROW_PEAK_TIME = 0.08;
+/** 腕を振った弧が見える時間(秒)。 */
+export const THROW_ARC_TIME = 0.15;
+/** 投げていないときの、投げてからの経過時間の値(動きが終わっていることを表す大きな値)。 */
+export const THROW_IDLE_T = 99;
+
 // --- 柱への衝突の演出 ---
 /** ヒットストップ(秒)。この間、世界の更新を止める。 */
 export const HITSTOP_TIME = 0.25;

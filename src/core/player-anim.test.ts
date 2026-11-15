@@ -4,7 +4,9 @@ import {
   CLIP_NAMES,
   HIT_TIME,
   initialAnim,
+  NO_THROW_POSE,
   stepAnim,
+  throwPose,
   validateAtlas,
   walkPeriod,
   type AnimInput,
@@ -13,7 +15,7 @@ import {
   type ClipName,
   type Frame,
 } from './player-anim';
-import { PLAYER_DISPLAY_HEIGHT, PLAYER_FOOT_SINK } from './config';
+import { PLAYER_DISPLAY_HEIGHT, PLAYER_FOOT_SINK, THROW_ANIM_TIME, THROW_ARC_TIME, THROW_LEAN_DEG, THROW_PEAK_TIME } from './config';
 
 // プロジェクトには Node の型定義を入れていない(テストの実行は Node なので、実行時には使える)
 // @ts-expect-error node:fs の型がない
@@ -285,3 +287,44 @@ describe('被弾・硬直・やられ', () => {
     expect(s.clip).toBe('hit');
   });
 });
+
+describe('投げる動き(throwPose)', () => {
+  it('投げた瞬間は傾き 0、0.08 秒で最大(14 度)、0.3 秒で動きなし、0.4 秒は動きなし', () => {
+    expect(throwPose(0).leanDeg).toBe(0);
+    expect(throwPose(THROW_PEAK_TIME).leanDeg).toBeCloseTo(THROW_LEAN_DEG, 9);
+    expect(throwPose(THROW_ANIM_TIME)).toEqual(NO_THROW_POSE);
+    expect(throwPose(0.4)).toEqual(NO_THROW_POSE);
+    expect(throwPose(-1)).toEqual(NO_THROW_POSE);
+    expect(throwPose(99)).toEqual(NO_THROW_POSE);
+  });
+
+  it('最大のあと、なめらかに(単調に)戻る。倍率・ずれも、最大のときに最大', () => {
+    let prev = throwPose(THROW_PEAK_TIME).leanDeg;
+    for (let t = THROW_PEAK_TIME + 0.01; t < THROW_ANIM_TIME; t += 0.01) {
+      const d = throwPose(t).leanDeg;
+      expect(d).toBeLessThanOrEqual(prev + 1e-9);
+      prev = d;
+    }
+    const peak = throwPose(THROW_PEAK_TIME);
+    expect(peak.scaleX).toBeCloseTo(1.05, 9);
+    expect(peak.scaleY).toBeCloseTo(0.97, 9);
+    expect(peak.shift).toBeCloseTo(4, 9);
+  });
+
+  it('傾きは、最大 14 度を超えず、投げる途中は 0 以上', () => {
+    for (let t = 0; t < THROW_ANIM_TIME; t += 0.005) {
+      const p = throwPose(t);
+      expect(p.leanDeg).toBeGreaterThanOrEqual(0);
+      expect(p.leanDeg).toBeLessThanOrEqual(THROW_LEAN_DEG + 1e-9);
+    }
+  });
+
+  it('弧は、0.05 秒で 0 より大きく 1 以下、0.15 秒を過ぎると 0', () => {
+    const a = throwPose(0.05).arcAlpha;
+    expect(a).toBeGreaterThan(0);
+    expect(a).toBeLessThanOrEqual(1);
+    expect(throwPose(THROW_ARC_TIME).arcAlpha).toBe(0);
+    expect(throwPose(THROW_ARC_TIME + 0.05).arcAlpha).toBe(0);
+  });
+});
+

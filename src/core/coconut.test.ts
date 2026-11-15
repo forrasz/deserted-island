@@ -13,6 +13,7 @@ import { dropCoconut, stepCoconuts, stepThrown, throwCoconut, thrownRect } from 
 import { BOSS_DEFS, createBoss, type Boss } from './boss';
 import { BOSS_INVULN_TIME, COCONUT_DAMAGE } from './config';
 import { createEnemy } from './enemy';
+import { THROW_IDLE_T } from './config';
 import { createGame, stepGame, type GameState } from './game';
 import { NO_INPUT, type InputState } from './input';
 import { STAGE } from './stage';
@@ -163,6 +164,33 @@ describe('ヤシの実を投げる', () => {
     g = run(g, NO_INPUT, 40);
     expect(g.enemies[0]!.alive).toBe(false);
     expect(g.thrown).toHaveLength(0);
+  });
+});
+
+describe('投げてからの経過時間(throwT)', () => {
+  it('初めは「投げていない」を表す大きな値で、再プレイでも同じ', () => {
+    expect(createGame().throwT).toBe(THROW_IDLE_T);
+  });
+
+  it('投げた更新で 0 になり、更新のたびに増える', () => {
+    let g = stepGame(arena({ held: 2 }), THROW, FIXED_DT);
+    expect(g.throwT).toBe(0);
+    g = stepGame(g, NO_INPUT, FIXED_DT);
+    expect(g.throwT).toBeCloseTo(FIXED_DT, 9);
+    g = run(g, NO_INPUT, 30);
+    expect(g.throwT).toBeCloseTo(31 * FIXED_DT, 6);
+  });
+
+  it('手持ちが 0 個で押しても、経過時間は 0 にならない', () => {
+    const g = stepGame(arena({ held: 0 }), THROW, FIXED_DT);
+    expect(g.throwT).toBeGreaterThan(1);
+  });
+
+  it('投げる位置・速さ・手持ちの変化は、動きの有無に関係なく同じ', () => {
+    const g = stepGame(arena({ held: 2 }), THROW, FIXED_DT);
+    expect(g.held).toBe(1);
+    expect(g.thrown).toHaveLength(1);
+    expect(g.thrown[0]!.vx).toBeCloseTo(420, 6);
   });
 });
 
