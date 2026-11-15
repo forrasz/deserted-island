@@ -215,14 +215,42 @@ export const HIDDEN_HOLE_X = WORLD_WIDTH / 2 - HIDDEN_HOLE_WIDTH / 2;
 /** 闘技場の入口に立つ、壊せる石の柱の大きさ(px)。高さはジャンプの最高点(約 140)より高い。 */
 export const FINAL_PILLAR_WIDTH = 60;
 export const FINAL_PILLAR_HEIGHT = 180;
-/** ヌシが柱にぶつかったあとの気絶の時間(秒)。 */
+/** ヌシが柱にぶつかったあとの気絶の時間(秒)。通常形態と、強化形態。 */
 export const NUSHI_STAGGER_TIME = 6;
-/** 気絶中のヌシを踏んだときの、体力の減り方。 */
-export const NUSHI_STAGGER_DAMAGE = 4;
-/** 気絶中に踏まれたあと、起き上がるまでの時間(秒)。その間は、かがんだまま、触れても被弾せず、踏んでもダメージを受けない。 */
-export const NUSHI_RECOVER_TIME = 0.5;
-/** 壊れた柱が、再び立てるようになるまでの時間(秒)。 */
+export const NUSHI_STAGGER_TIME_2 = 4.5;
+/** 壊れた柱が、再び立てるようになるまでの時間(秒)。通常形態と、強化形態。 */
 export const PILLAR_REGROW_TIME = 8;
+export const PILLAR_REGROW_TIME_2 = 6;
+
+// --- ヤシの実(ヌシの弱点を狙う道具) ---
+/** 持てる数。 */
+export const COCONUT_MAX_HELD = 2;
+/** 拾われてから、同じ位置に再び出現するまでの時間(秒)。 */
+export const COCONUT_RESPAWN_TIME = 10;
+/** 地面のヤシの実の大きさ(px)。 */
+export const COCONUT_SIZE = 20;
+/** 投げたときの速さ(px/s): 水平(向きに加える。プレイヤーの水平速度の半分も足す)と、上向き。重力(px/s²)。 */
+export const COCONUT_THROW_VX = 420;
+export const COCONUT_THROW_VY = 350;
+export const COCONUT_GRAVITY = 1200;
+/** 練習用の的の大きさ(px)と、当たったあとに光る時間(秒)。 */
+export const TARGET_SIZE = 40;
+export const TARGET_FLASH_TIME = 0.4;
+/** ヤシの実が頭(弱点)に当たったときの、ヌシの体力の減り方(気絶中 / 口を開けているとき)。命中のあと、続けて当たらない時間(秒)。 */
+export const NUSHI_STAGGER_DAMAGE = 4;
+export const NUSHI_MOUTH_DAMAGE = 2;
+export const NUSHI_HIT_INVULN = 0.5;
+/** 強化形態の着地の隙(秒)。この間、口を開けて弱点が現れる。 */
+export const NUSHI_LANDING_OPEN = 0.5;
+
+// --- 柱への衝突の演出 ---
+/** ヒットストップ(秒)。この間、世界の更新を止める。 */
+export const HITSTOP_TIME = 0.25;
+/** 衝突の演出(揺れ・破片・擬音)の長さ(秒)と、画面の揺れの最大の振れ幅(px)、破片の数。 */
+export const IMPACT_SHAKE_TIME = 0.5;
+export const IMPACT_SHAKE_MAX = 10;
+export const IMPACT_DEBRIS_COUNT = 10;
+export const IMPACT_TEXT_TIME = 1;
 
 // --- ラスボスの演出(登場・撃破・エンディング) ---
 /** プレイヤーの右辺が、西の柱の左辺のこの距離(px)手前に達すると、ヌシの登場演出が始まる。 */

@@ -105,3 +105,25 @@ describe('画面の向きの判定(mobile-display)', () => {
     expect(isPortrait(500, 500)).toBe(false);
   });
 });
+
+describe('投げるボタン(touch-controls)', () => {
+  it('投げるボタンを押している間だけ、投げる入力が有効になる(X キーと同じ入力)', () => {
+    const s = press(NO_TOUCH, 3, 'throw');
+    expect(toInput(s)).toEqual({ ...NO_INPUT, throw: true });
+    expect(toInput(release(s, 3)).throw).toBe(false);
+  });
+
+  it('ジャンプしながら投げられる(別々の指)。ジャンプの指を離しても、投げるは有効のまま', () => {
+    let s = press(press(NO_TOUCH, 1, 'jump'), 2, 'throw');
+    expect(toInput(s)).toEqual({ ...NO_INPUT, jump: true, throw: true });
+    s = release(s, 1);
+    expect(toInput(s)).toEqual({ ...NO_INPUT, throw: true });
+  });
+
+  it('キーボードとタッチは、投げるも OR で合成される。すべて解除で無効', () => {
+    expect(mergeInput({ ...NO_INPUT, throw: true }, NO_INPUT).throw).toBe(true);
+    expect(mergeInput(NO_INPUT, toInput(press(NO_TOUCH, 1, 'throw'))).throw).toBe(true);
+    expect(toInput(releaseAll()).throw).toBe(false);
+  });
+});
+

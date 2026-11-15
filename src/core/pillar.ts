@@ -61,6 +61,8 @@ export interface RegrowCtx {
   playerRight: number;
   /** ヌシが生きているか。倒されたあとは、柱は再生しない。 */
   bossAlive: boolean;
+  /** 再生までの時間(秒)。省略時は PILLAR_REGROW_TIME(強化形態は短い)。 */
+  regrowTime?: number;
 }
 
 /**
@@ -79,7 +81,7 @@ export function stepPillars(pillars: readonly Pillar[], ctx: RegrowCtx, dt: numb
       !ctx.anyStaggered &&
       outside &&
       !ctx.blockers.some((b) => overlaps(b, pillarRect(p)));
-    if (brokenT >= PILLAR_REGROW_TIME - 1e-9 && free) return { ...p, alive: true, brokenT: 0 };
+    if (brokenT >= (ctx.regrowTime ?? PILLAR_REGROW_TIME) - 1e-9 && free) return { ...p, alive: true, brokenT: 0 };
     return { ...p, brokenT };
   });
 }

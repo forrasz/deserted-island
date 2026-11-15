@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bossRect, BOSS_DEFS, createBoss, type Boss } from './boss';
 import { bossFlags, NUSHI_FORM1, stepBossScript, type BossCtx } from './boss-scripts';
-import { finishDying, ticks } from './boss-test-helpers';
+import { coconutAtWeak, finishDying, ticks } from './boss-test-helpers';
 import type { Rect } from './collision';
 import {
   FIXED_DT,
@@ -276,14 +276,11 @@ describe('柱を使った戦い(game)', () => {
     }
     return s;
   }
-  /** 気絶中のヌシを、かがんだ上辺へ落ちて踏む。 */
-  function stompStaggered(g: GameState): GameState {
-    const r = bossRect(g.bosses[0]!);
-    return stepGame(
-      { ...g, player: { x: g.bosses[0]!.x + 90, y: r.y - H - 5, vx: 0, vy: 300, onGround: false } },
-      NO_INPUT,
-      FIXED_DT,
-    );
+  /** 気絶中のヌシの頭に、ヤシの実を当てる(プレイヤーは西の柱の外側)。 */
+  function stompStaggered(g0: GameState): GameState {
+    let g = g0;
+    for (let i = 0; i < 30 && g.hitStop > 0; i++) g = stepGame({ ...g, player: { ...westSpot } }, NO_INPUT, FIXED_DT); // ヒットストップが終わるまで
+    return stepGame({ ...g, player: { ...westSpot }, thrown: coconutAtWeak(g.bosses[0]!) }, NO_INPUT, FIXED_DT);
   }
 
   it('西の柱の手前に立つと、ヌシは西の柱へ突進して、柱が壊れ(衝撃で両方とも崩れ)、気絶する', () => {
@@ -310,7 +307,7 @@ describe('柱を使った戦い(game)', () => {
     expect(g.bosses[0]!.hp).toBe(12);
   });
 
-  it('誘って、踏む、を 3 回くり返すと、体力 12 のヌシが倒れ、部品が落ち、柱はすべて崩れて、もう立たない(2 回目で変身する)', () => {
+  it('誘って、ヤシの実を当てる、を 3 回くり返すと、体力 12 のヌシが倒れ、部品が落ち、柱はすべて崩れて、もう立たない(2 回目で変身する)', () => {
     let g = arena();
     const hps: number[] = [];
     for (let round = 0; round < 3; round++) {
@@ -352,25 +349,25 @@ describe('柱を使った戦い(game)', () => {
 });
 
 describe('起き上がり(気絶が解けるとき)', () => {
-  it('踏まれたあと、0.5 秒は、続けて踏んでもダメージを受けない', () => {
+  it('命中のあと、0.5 秒は、続けて当たってもダメージを受けない(気絶は続く)', () => {
     const b = nushiAt({ stagger: 6 });
-    const r = bossRect(b);
-    const stomp = (boss: Boss): GameState =>
+    const hit = (boss: Boss): GameState =>
       stepGame(
         {
           ...createGame(undefined, { bosses: [], enemies: [] }),
           bosses: [boss],
-          player: { x: boss.x + 90, y: bossRect(boss).y - H - 5, vx: 0, vy: 300, onGround: false },
+          player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
+          thrown: coconutAtWeak(boss),
         },
         NO_INPUT,
         FIXED_DT,
       );
-    expect(r.h).toBe(100);
-    const first = stomp(b);
+    expect(bossRect(b).h).toBe(100);
+    const first = hit(b);
     expect(first.bosses[0]!.hp).toBe(8);
-    const second = stomp(first.bosses[0]!);
+    expect(first.bosses[0]!.stagger).toBeGreaterThan(5.9);
+    const second = hit(first.bosses[0]!);
     expect(second.bosses[0]!.hp).toBe(8); // ダメージなし
-    expect(second.player.vy).toBeLessThan(0); // 跳ね返りだけ
   });
 
   it('プレイヤーが立った姿の矩形と重なっていると、離れるまで、かがんだまま起き上がらない', () => {

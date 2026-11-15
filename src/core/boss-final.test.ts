@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_DEFS, bossRect, createBoss, type Boss } from './boss';
 import { bossFlags, NUSHI_FORM1, NUSHI_FORM2, stepBossScript, type BossCtx } from './boss-scripts';
-import { ctxAt, finishDying, ticks } from './boss-test-helpers';
+import { coconutAtWeak, ctxAt, finishDying, ticks } from './boss-test-helpers';
 import { createWave } from './projectile';
 import {
   BOSS_RAGE_TIME_SCALE,
   BOSS_TRANSFORM_TIME,
   FIXED_DT,
   GROUND_Y,
-  NUSHI_RECOVER_TIME,
   PLAYER_HEIGHT,
   STOMP_BOUNCE_SPEED,
+  NUSHI_HIT_INVULN,
+  NUSHI_MOUTH_DAMAGE,
   PLAYER_MAX_HP,
 } from './config';
 import { createGame, stepGame, type GameState } from './game';
@@ -190,14 +191,15 @@ describe('ヌシ: 形態変化(5.2)', () => {
     expect(g.hp).toBe(PLAYER_MAX_HP); // 被弾もしない
   });
 
-  it('体力が 8 の気絶中に踏むと、体力が 4(6 以下)になり、次の更新で変身に入る', () => {
+  it('体力が 8 の気絶中に、ヤシの実が頭に当たると、体力が 4(6 以下)になり、次の更新で変身に入る', () => {
     const b = nushi({ hp: 8, stagger: 6 }, 1000, 1000, 1000);
     const base = createGame(undefined, { bosses: [], enemies: [] });
     let g: GameState = {
       ...base,
       intro: { state: 'done', t: 3 },
       bosses: [b],
-      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
+      thrown: coconutAtWeak(b),
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.hp).toBe(4);
@@ -278,7 +280,8 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
     let g: GameState = {
       ...createGame(undefined, none),
       bosses: [b],
-      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
+      thrown: coconutAtWeak(b),
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
     // 体力が 0 になっても、すぐには撃破されず、部品もまだない(撃破演出)
@@ -298,7 +301,8 @@ describe('ヌシ: 撃破と再プレイ(5.4)', () => {
       ...createGame(undefined, none),
       bosses: [b],
       projectiles: [wave],
-      player: { x: 1090, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false },
+      player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
+      thrown: coconutAtWeak(b),
     };
     g = stepGame(g, NO_INPUT, FIXED_DT);
     expect(g.projectiles).toHaveLength(0); // 撃破演出が始まると、弾は消える
@@ -367,11 +371,63 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
     };
   };
 
-  it('ゲーム内: 気絶中は、ジャンプの最高点付近から落ちて、踏める(体力が 4 減り、跳ね返り、短い起き上がりのあと気絶が解ける)', () => {
-    const g = stepGame(stompState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
+  /** 気絶中のヌシの頭に、ヤシの実が当たる世界(プレイヤーは遠くにいる)。 */
+  const hitState = (b: Boss): GameState => ({
+    ...createGame(undefined, { bosses: [], enemies: [] }),
+    intro: { state: 'done', t: 3 },
+    bosses: [b],
+    player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
+    thrown: coconutAtWeak(b),
+  });
+
+  it('ゲーム内: 気絶中は、ヤシの実が頭に当たると体力が 4 減る(気絶は続き、実は消え、続けては当たらない)', () => {
+    const g = stepGame(hitState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
     expect(g.bosses[0]!.hp).toBe(8);
-    expect(g.bosses[0]!.stagger).toBe(NUSHI_RECOVER_TIME);
+    expect(g.bosses[0]!.stagger).toBeGreaterThan(5.9);
+    expect(g.bosses[0]!.invuln).toBeCloseTo(NUSHI_HIT_INVULN - FIXED_DT * 0, 6);
+    expect(g.thrown).toHaveLength(0);
+  });
+
+  it('ゲーム内: 気絶中に踏んでも、体力は減らず、跳ね返るだけ(被弾もしない)', () => {
+    const g = stepGame(stompState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(12);
+    expect(g.bosses[0]!.stagger).toBeGreaterThan(5.9);
     expect(g.player.vy).toBe(-STOMP_BOUNCE_SPEED);
+    expect(g.hp).toBe(PLAYER_MAX_HP);
+  });
+
+  it('ゲーム内: 命中の直後(0.3 秒後)の 2 つめは、ダメージを受けず、実は消える', () => {
+    let g = stepGame(hitState(nushi({ stagger: 6 }, 1000, 1000, 1000)), NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(8);
+    for (let i = 0; i < 18; i++) g = stepGame(g, NO_INPUT, FIXED_DT); // 0.3 秒
+    g = stepGame({ ...g, thrown: coconutAtWeak(g.bosses[0]!) }, NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(8);
+    expect(g.thrown).toHaveLength(0);
+  });
+
+  it('ゲーム内: 体に当たった(頭ではない)ヤシの実は、ダメージなしで消える', () => {
+    const b = nushi({ stagger: 6 }, 1000, 1000, 1000);
+    const r = bossRect(b);
+    const s = { ...hitState(b), thrown: [{ x: r.x + 20, y: GROUND_Y - 30, vx: 0, vy: 0 }] }; // かがんだ体の足元
+    const g = stepGame(s, NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(12);
+    expect(g.thrown).toHaveLength(0);
+  });
+
+  it('ゲーム内: 口を開けている(弾の予備動作)ときの命中は、体力が 2 減る', () => {
+    const b = nushi({ step: 4, t: 0.1, aimDir: 1 }, 1000, 1000, 1000); // step 4 = 弾の予備動作
+    expect(action(b)).toBe('telegraph');
+    const g = stepGame(hitState(b), NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(12 - NUSHI_MOUTH_DAMAGE);
+  });
+
+  it('ゲーム内: 往復中のヌシには、ヤシの実が当たってもダメージがない(体に当たって消える)', () => {
+    const b = nushi({}, 1000, 1000, 1000);
+    const r = bossRect(b);
+    const s = { ...hitState(b), thrown: [{ x: r.x + 20, y: r.y + 100, vx: 0, vy: 0 }] };
+    const g = stepGame(s, NO_INPUT, FIXED_DT);
+    expect(g.bosses[0]!.hp).toBe(12);
+    expect(g.thrown).toHaveLength(0);
   });
 
   it('ゲーム内: 気絶中は、触れても被弾せず、押し戻されない', () => {
@@ -386,11 +442,11 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
     expect(g.player.x).toBe(b.x - 30);
   });
 
-  it('ゲーム内: 3 回の気絶中の踏みつけで、体力 12 のヌシが倒れる', () => {
+  it('ゲーム内: 気絶中の命中 3 回で、体力 12 のヌシが倒れる(撃破演出に入る)', () => {
     let b = nushi({ stagger: 6 }, 1000, 1000, 1000);
     for (const hp of [8, 4, 0]) {
       const later = b.hp <= 6 ? { transformed: true, form: 2 as const, transformT: 0 } : {};
-      const g = stepGame(stompState({ ...b, stagger: 6, invuln: 0, ...later }), NO_INPUT, FIXED_DT);
+      const g = stepGame(hitState({ ...b, stagger: 6, invuln: 0, ...later }), NO_INPUT, FIXED_DT);
       expect(g.bosses[0]!.hp).toBe(hp);
       b = g.bosses[0]!;
     }
@@ -426,7 +482,7 @@ describe('ヌシ: 気絶の間は身をかがめて、ジャンプで踏める�
 
   it('撃破時の部品は、かがんだ矩形の中央にドロップする', () => {
     const b = nushi({ stagger: 6, hp: 1, transformed: true, form: 2 }, 1000, 1000, 1000);
-    const g = finishDying(stepGame(stompState(b), NO_INPUT, FIXED_DT));
+    const g = finishDying(stepGame(hitState(b), NO_INPUT, FIXED_DT));
     expect(g.bosses[0]!.alive).toBe(false);
     expect(g.parts).toHaveLength(1);
   });

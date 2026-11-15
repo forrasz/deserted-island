@@ -1,10 +1,19 @@
+import type { Boss } from './boss';
+import { scriptOf, weakPointOf } from './boss-scripts';
 import {
   ENDING_DURATION,
+  IMPACT_DEBRIS_COUNT,
+  IMPACT_SHAKE_MAX,
+  IMPACT_SHAKE_TIME,
+  IMPACT_TEXT_TIME,
   INTRO_TIME,
   NUSHI_DYING_TIME,
+  NUSHI_STAGGER_TIME,
+  NUSHI_STAGGER_TIME_2,
   VIEW_HEIGHT,
   VIEW_WIDTH,
 } from './config';
+import type { Pillar, PillarSide } from './pillar';
 
 /**
  * ラスボスの演出の時間割。時刻(または進行度)から、描画に使う値を返す純粋関数。乱数は使わない。
@@ -208,5 +217,99 @@ export function endingScene(t: number): EndingScene {
     messages,
     wave: tt,
     fadeOut: clamp01((tt - (ENDING_DURATION - 0.5)) / 0.5),
+  };
+}
+
+
+// ---- 柱への衝突の演出と、ヌシ戦の合図 ----
+
+/** 衝突の演出の画面の揺れ(px)。t は衝突からの経過時間(秒)。振れ幅は最大 IMPACT_SHAKE_MAX で、だんだん小さくなり、IMPACT_SHAKE_TIME で 0。 */
+export function impactShake(t: number): { x: number; y: number } {
+  if (t < 0 || t >= IMPACT_SHAKE_TIME) return { x: 0, y: 0 };
+  const amp = IMPACT_SHAKE_MAX * (1 - t / IMPACT_SHAKE_TIME);
+  return { x: amp * Math.sin(t * 90), y: amp * Math.sin(t * 110 + 1) };
+}
+
+export interface Debris {
+  /** 衝突の位置(ワールド x、地面からの高さ 0)からの相対位置(px。y は上が負)と、大きさ(px)・回転(ラジアン)。 */
+  x: number;
+  y: number;
+  size: number;
+  rot: number;
+}
+
+/**
+ * 柱の破片(IMPACT_DEBRIS_COUNT 個)。決まった軌道(乱数なし)で、突進の向き dir とは反対の側と上へ飛び散る。
+ * 同じ t・dir なら、いつも同じ位置になる。
+ */
+export function impactDebris(t: number, dir: 1 | -1): Debris[] {
+  if (t < 0 || t >= IMPACT_TEXT_TIME) return [];
+  const out: Debris[] = [];
+  for (let i = 0; i < IMPACT_DEBRIS_COUNT; i++) {
+    const vx = -dir * (60 + hash01(i, 1) * 220);
+    const vy = -(180 + hash01(i, 2) * 260);
+    out.push({
+      x: vx * t,
+      y: vy * t + 0.5 * 900 * t * t - 40,
+      size: 6 + hash01(i, 3) * 8,
+      rot: (hash01(i, 4) - 0.5) * 8 * t,
+    });
+  }
+  return out;
+}
+
+/** 擬音「ガッシャーン!」の表示。 */
+export const IMPACT_TEXT = 'ガッシャーン!';
+/** 擬音の濃さ(0〜1)。IMPACT_TEXT_TIME の最後の 0.3 秒で薄くなる。 */
+export function impactTextAlpha(t: number): number {
+  if (t < 0 || t >= IMPACT_TEXT_TIME) return 0;
+  return clamp01((IMPACT_TEXT_TIME - t) / 0.3);
+}
+
+/** 突進の予告。向かう側の柱(立っているとき)と、突進の向き。突進の予備動作の間だけ(それ以外は null)。 */
+export function chargeForecast(boss: Boss, pillars: readonly Pillar[]): { dir: 1 | -1; pillar: PillarSide | null } | null {
+  if (boss.kind !== 'nushi' || !boss.alive || boss.stagger > 0 || boss.transformT > 0 || boss.dying > 0) return null;
+  const script = scriptOf(boss);
+  const cur = script[boss.step % script.length];
+  const nextStep = script[(boss.step + 1) % script.length];
+  if (cur?.a !== 'telegraph' || nextStep?.a !== 'dash') return null;
+  const side: PillarSide = boss.dir < 0 ? 'west' : 'east';
+  const standing = pillars.some((p) => p.alive && p.side === side);
+  return { dir: boss.dir, pillar: standing ? side : null };
+}
+
+/** 気絶の残り時間の割合(0〜1)。形態ごとの気絶の長さを基準にする。 */
+export function staggerRatio(boss: Boss): number {
+  const total = boss.form === 2 ? NUSHI_STAGGER_TIME_2 : NUSHI_STAGGER_TIME;
+  return clamp01(boss.stagger / total);
+}
+
+export interface WeakSignal {
+  /** 頭を光らせるか。 */
+  glow: boolean;
+  /** 頭の上の矢印。 */
+  arrow: boolean;
+  /** 合図の文字(なければ null)。 */
+  text: string | null;
+  /** 気絶の残り時間の円の目盛り(0〜1。なければ null)。 */
+  ring: number | null;
+}
+
+const NO_SIGNAL: WeakSignal = { glow: false, arrow: false, text: null, ring: null };
+
+/**
+ * ヌシの弱点の合図。弱点の矩形がある間だけ出す。気絶中は、頭の光・矢印・文字・円(ヒットストップが終わってから)、
+ * 口を開けているときは、頭の光だけ。手持ちのヤシの実がなければ、文字は「実を拾え!」。
+ */
+export function weakSignal(boss: Boss, held: number, hitStop: number): WeakSignal {
+  const w = weakPointOf(boss);
+  if (!w) return NO_SIGNAL;
+  if (w.kind === 'mouth') return { glow: true, arrow: false, text: null, ring: null };
+  if (hitStop > 0) return NO_SIGNAL;
+  return {
+    glow: true,
+    arrow: true,
+    text: held > 0 ? 'いまだ! 投げろ!' : '実を拾え!',
+    ring: staggerRatio(boss),
   };
 }

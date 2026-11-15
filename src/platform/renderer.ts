@@ -1,5 +1,6 @@
 import { itemRect, type BonusState } from '../core/bonus';
 import {
+  chargeForecast,
   dyingBlinkWhite,
   dyingBossVisible,
   dyingFlash,
@@ -7,7 +8,12 @@ import {
   dyingShake,
   endingScene,
   explosions,
+  IMPACT_TEXT,
+  impactDebris,
+  impactShake,
+  impactTextAlpha,
   introTimeline,
+  weakSignal,
 } from '../core/cinematic';
 import { worldToScreen, worldToScreenY } from '../core/camera';
 import type { Rect } from '../core/collision';
@@ -18,6 +24,7 @@ import {
   BONUS_GROUND_Y,
   BONUS_ITEM_SIZE,
   BONUS_WIDTH as BONUS_WORLD_WIDTH,
+  COCONUT_MAX_HELD,
   BONUS_VENTS,
   ENEMY_SIZE,
   PARALLAX_FACTOR,
@@ -40,7 +47,8 @@ import {
 } from '../core/config';
 import { blinkVisible } from '../core/blink';
 import { bossRect, type Boss } from '../core/boss';
-import { bossFlags } from '../core/boss-scripts';
+import { bossFlags, weakPointOf } from '../core/boss-scripts';
+import { coconutRect, thrownRect } from '../core/coconut';
 import type { Enemy } from '../core/enemy';
 import { ENEMY_DEFS } from '../core/enemy-defs';
 import { nextFacing, type Facing } from '../core/facing';
@@ -106,6 +114,11 @@ export class Renderer {
       shakeX = sh.x;
       shakeY = sh.y;
     }
+    if (flow.game.impact && !dyingBoss && intro.state !== 'playing') {
+      const sh = impactShake(flow.game.impact.t);
+      shakeX = sh.x;
+      shakeY = sh.y;
+    }
     ctx.save();
     ctx.translate(shakeX, shakeY);
     this.drawScene(flow, cameraX, cameraY);
@@ -157,6 +170,9 @@ export class Renderer {
       this.drawBoss(boss, bx, facing);
     }
 
+    // ヌシ戦の合図(突進の予告・弱点の光と文字)と、ヤシの実・的
+    this.drawNushiBattle(flow, cameraX);
+
     // ボスが出した弾と衝撃波
     for (const p of projectiles) this.drawProjectile(p, cameraX);
 
@@ -176,10 +192,15 @@ export class Renderer {
     }
 
     this.drawPlayer(player, hitInvuln, cameraX, flow.game.invincible, flow.game.dead, false);
+    this.drawImpact(flow, cameraX);
     if (flow.game.invincible) this.text('無敵モード', 16, 108, 24, 'left', '#ffd700');
 
     // HUD(画面座標の固定位置。カメラの影響を受けない)
     this.drawHp(hp);
+    // 手持ちのヤシの実(X キー / 投げるボタンで投げる)
+    const { held } = flow.game;
+    for (let i = 0; i < COCONUT_MAX_HELD; i++) this.drawCoconut(VIEW_WIDTH - 40 - i * 34, 30, 12, i < held);
+    this.text('ヤシの実', VIEW_WIDTH - 16, 48, 16, 'right');
     this.text(`イカダの部品: ${partsCollected}/${RAFT_PARTS_REQUIRED}`, 16, 44, 24, 'left');
     this.text(
       raftComplete ? 'イカダ: 完成! 右の海へ向かおう' : 'イカダ: 未完成',
@@ -540,7 +561,7 @@ export class Renderer {
     }
 
     // 気絶している間は、頭上で星が回る
-    if (flags.staggered) {
+    if (flags.staggered && boss.kind !== 'nushi') {
       ctx.font = 'bold 26px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -556,6 +577,148 @@ export class Renderer {
     for (let i = 0; i < boss.maxHp; i++) {
       ctx.fillStyle = i < boss.hp ? '#ff4d4d' : '#444444';
       ctx.fillRect(bx + i * seg + 1, top - (boss.kind === 'nushi' ? 32 : 12), seg - 2, 8);
+    }
+  }
+
+  /** ヤシの実 1 個(円と、ふくらみの線)。active が false なら、薄い輪郭だけ。 */
+  private drawCoconut(cx: number, cy: number, r: number, active = true): void {
+    const { ctx } = this;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    if (active) {
+      ctx.fillStyle = '#7b4a1e';
+      ctx.fill();
+      ctx.strokeStyle = '#3e2410';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#a8703a';
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  /** ヌシ戦の描画: 地面のヤシの実・飛んでいる実・的・突進の予告(目標の柱の枠と足元の矢印)・弱点の光と文字。 */
+  private drawNushiBattle(flow: Flow, cameraX: number): void {
+    const { ctx } = this;
+    const g = flow.game;
+    for (const c of g.coconuts) {
+      if (!c.alive) continue;
+      const r = coconutRect(c);
+      const x = worldToScreen(r.x, cameraX);
+      if (x + r.w < 0 || x > VIEW_WIDTH) continue;
+      this.drawCoconut(x + r.w / 2, this.sy(r.y) + r.h / 2, r.w / 2);
+    }
+    if (g.target) {
+      const x = worldToScreen(g.target.x, cameraX);
+      if (x + g.target.w >= 0 && x <= VIEW_WIDTH) {
+        const cx = x + g.target.w / 2;
+        const cy = this.sy(g.target.y) + g.target.h / 2;
+        const hit = g.targetFlash > 0;
+        ctx.fillStyle = hit ? '#ffee58' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, g.target.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = hit ? '#ff7043' : '#e53935';
+        ctx.beginPath();
+        ctx.arc(cx, cy, g.target.w / 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = hit ? '#ffee58' : '#ffffff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, g.target.w / 6, 0, Math.PI * 2);
+        ctx.fill();
+        // 的を支える杭
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(cx - 2, cy + g.target.h / 2, 4, GROUND_Y - g.target.y - g.target.h);
+      }
+    }
+    for (const t of g.thrown) {
+      const r = thrownRect(t);
+      this.drawCoconut(worldToScreen(r.x, cameraX) + r.w / 2, this.sy(r.y) + r.h / 2, r.w / 2);
+    }
+
+    for (const boss of g.bosses) {
+      if (boss.kind !== 'nushi' || !boss.alive) continue;
+      // 突進の予告: 向かう側の柱を暖色の枠で強調し(点滅しない)、足元に向きの矢印
+      const fc = chargeForecast(boss, g.pillars);
+      if (fc) {
+        const pillar = g.pillars.find((p) => p.alive && p.side === fc.pillar);
+        if (pillar) {
+          const px = worldToScreen(pillar.x, cameraX);
+          ctx.strokeStyle = '#ff9100';
+          ctx.lineWidth = 5;
+          ctx.strokeRect(px - 4, this.sy(pillar.y) - 12, pillar.w + 8, pillar.h + 12);
+        }
+        const bx = worldToScreen(boss.x, cameraX);
+        const ay = this.sy(GROUND_Y) - 14;
+        const ax = bx + boss.w / 2;
+        ctx.fillStyle = '#ff9100';
+        ctx.beginPath();
+        for (const off of [0, 36]) {
+          const x0 = ax + fc.dir * (60 + off);
+          ctx.moveTo(x0 + fc.dir * 22, ay);
+          ctx.lineTo(x0 - fc.dir * 4, ay - 14);
+          ctx.lineTo(x0 - fc.dir * 4, ay + 14);
+        }
+        ctx.fill();
+      }
+      // 弱点の光・矢印・文字・円の目盛り
+      const weak = weakPointOf(boss);
+      const sig = weakSignal(boss, g.held, g.hitStop);
+      if (weak && sig.glow) {
+        const wx = worldToScreen(weak.rect.x, cameraX);
+        const wy = this.sy(weak.rect.y);
+        ctx.fillStyle = 'rgba(255, 235, 59, 0.55)';
+        ctx.fillRect(wx, wy, weak.rect.w, weak.rect.h);
+        ctx.strokeStyle = '#ffeb3b';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(wx, wy, weak.rect.w, weak.rect.h);
+        const cx = wx + weak.rect.w / 2;
+        if (sig.arrow) {
+          ctx.fillStyle = '#ffeb3b';
+          ctx.beginPath();
+          ctx.moveTo(cx, wy - 40);
+          ctx.lineTo(cx - 14, wy - 66);
+          ctx.lineTo(cx + 14, wy - 66);
+          ctx.fill();
+        }
+        if (sig.text) this.text(sig.text, cx, wy - 138, 26, 'center', '#ffeb3b');
+        if (sig.ring !== null) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 6;
+          ctx.beginPath();
+          ctx.arc(cx, wy - 92, 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * sig.ring);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  /** 柱への衝突の演出: 柱の破片と、擬音。 */
+  private drawImpact(flow: Flow, cameraX: number): void {
+    const im = flow.game.impact;
+    if (!im) return;
+    const { ctx } = this;
+    const ox = worldToScreen(im.x, cameraX);
+    const oy = this.sy(GROUND_Y);
+    ctx.fillStyle = '#8d8d94';
+    for (const d of impactDebris(im.t, im.dir)) {
+      ctx.save();
+      ctx.translate(ox + d.x, oy + d.y);
+      ctx.rotate(d.rot);
+      ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size);
+      ctx.restore();
+    }
+    const a = impactTextAlpha(im.t);
+    if (a > 0) {
+      ctx.save();
+      ctx.globalAlpha = a;
+      this.text(IMPACT_TEXT, VIEW_WIDTH / 2, 100, 56, 'center', '#ffeb3b');
+      ctx.restore();
     }
   }
 

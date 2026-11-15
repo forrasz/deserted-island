@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { finishDying } from './boss-test-helpers';
+import { coconutAtWeak, finishDying } from './boss-test-helpers';
 import { BOSS_DEFS, bossRect, createBoss, type Boss } from './boss';
 import {
   ENEMY_SIZE,
@@ -183,13 +183,12 @@ describe('ボスごとのドロップと部品 10 個', () => {
     let g = world([], bosses);
     for (let k = 0; k < 10; k++) {
       const b = g.bosses[k]!;
-      g = finishDying(
-        stepGame(
-          { ...g, player: { x: b.x + 20, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false } },
-          NO_INPUT,
-          FIXED_DT,
-        ),
-      );
+      // ヌシは踏んでも倒せない(気絶中の頭にヤシの実を当てる)。ほかのボスは踏む
+      const state =
+        b.kind === 'nushi'
+          ? { ...g, player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true }, thrown: coconutAtWeak(b) }
+          : { ...g, player: { x: b.x + 20, y: bossRect(b).y - H - 5, vx: 0, vy: 300, onGround: false } };
+      g = finishDying(stepGame(state, NO_INPUT, FIXED_DT));
       expect(g.bosses[k]!.alive).toBe(false);
       expect(g.parts.length + g.partsCollected).toBe(k + 1);
     }

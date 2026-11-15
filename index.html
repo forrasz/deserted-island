@@ -69,6 +69,12 @@
         height: 88px;
         font-size: 20px;
       }
+      /* 投げるボタン: ジャンプボタンの左(押し間違えない間隔を空ける) */
+      #touch-controls [data-btn="throw"] {
+        right: calc(var(--safe-r) + 124px);
+        bottom: calc(var(--safe-b) + 24px);
+        font-size: 16px;
+      }
 
       /* 縦向きの案内 */
       #rotate-notice {
@@ -93,6 +99,7 @@
       <button type="button" data-btn="left" aria-label="左">◀</button>
       <button type="button" data-btn="right" aria-label="右">▶</button>
       <button type="button" data-btn="jump" aria-label="ジャンプ">ジャンプ</button>
+      <button type="button" data-btn="throw" aria-label="投げる">投げる</button>
     </div>
     <div id="rotate-notice">スマホを横向きにしてください</div>
     <script type="module" src="/src/main.ts"></script>

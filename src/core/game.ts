@@ -1,7 +1,7 @@
 import { createBonus, exitPlayer, inHiddenHole, stepBonus, type BonusState } from './bonus';
 import { bossRect, createBoss, damageBoss, type Boss } from './boss';
-import { bossFlags, stepBossScript } from './boss-scripts';
-import { overlapAmount, overlaps } from './collision';
+import { bossFlags, stepBossScript, weakPointOf } from './boss-scripts';
+import { overlapAmount, overlaps, type Rect } from './collision';
 import { isStomp, playerRect } from './contact';
 import { createEnemy, stepEnemy, type Enemy } from './enemy';
 import { resolveEnemyContact } from './enemy-contact';
@@ -13,8 +13,15 @@ import {
   HIT_BOUNCE_SPEED,
   INTRO_TIME,
   INTRO_TRIGGER_DISTANCE,
-  NUSHI_RECOVER_TIME,
+  HITSTOP_TIME,
+  IMPACT_SHAKE_TIME,
+  IMPACT_TEXT_TIME,
+  NUSHI_HIT_INVULN,
+  NUSHI_MOUTH_DAMAGE,
   NUSHI_STAGGER_DAMAGE,
+  PILLAR_REGROW_TIME,
+  PILLAR_REGROW_TIME_2,
+  TARGET_FLASH_TIME,
   PLAYER_HEIGHT,
   PLAYER_INVULN_TIME,
   PLAYER_MAX_HP,
@@ -41,6 +48,15 @@ import {
   stepPillars,
   type Pillar,
 } from './pillar';
+import {
+  createCoconut,
+  stepCoconuts,
+  stepThrown,
+  throwCoconut,
+  thrownRect,
+  type Coconut,
+  type Thrown,
+} from './coconut';
 import { createPart, partRect, stepPart, type RaftPart } from './raft-part';
 import { STAGE, type Stage } from './stage';
 import { fallYOf, isFullySupported, platformsOf, solidsOf } from './terrain';
@@ -80,6 +96,23 @@ export interface GameState {
   pillars: Pillar[];
   /** 無敵モード(隠しコマンド)。オンの間は、敵・弾・石のダメージを受けず、穴に落ちてもHPが減らない。 */
   invincible: boolean;
+  /** 地面のヤシの実(拾われると、しばらくして同じ位置に再び出現する)。 */
+  coconuts: Coconut[];
+  /** 手持ちのヤシの実の数。 */
+  held: number;
+  /** 投げられて飛んでいるヤシの実。 */
+  thrown: Thrown[];
+  /** 直前の更新で、投げるキーが押されていたか(押した瞬間の判定に使う)。 */
+  throwHeld: boolean;
+  /** プレイヤーの向き(最後に押した左右。右 = 1)。投げる向きに使う。 */
+  facing: 1 | -1;
+  /** 練習用の的(なければ null)と、当たったあとに光る残り時間(秒)。 */
+  target: Rect | null;
+  targetFlash: number;
+  /** ヒットストップの残り時間(秒)。0 より大きい間は、世界の更新を止める。 */
+  hitStop: number;
+  /** 柱への衝突の演出。t は経過時間(秒)、x は衝突の位置(ワールド x)、dir は突進の向き。なければ null。 */
+  impact: { t: number; x: number; dir: 1 | -1 } | null;
 }
 
 /**
@@ -94,7 +127,7 @@ function pillarCenter(placements: Pick<Stage, 'bosses'>): number {
 
 export function createGame(
   world: WorldBounds = DEFAULT_WORLD,
-  placements: Pick<Stage, 'bosses' | 'enemies'> & Partial<Pick<Stage, 'pillars'>> = STAGE,
+  placements: Pick<Stage, 'bosses' | 'enemies'> & Partial<Pick<Stage, 'pillars' | 'coconuts' | 'target'>> = STAGE,
 ): GameState {
   const player = createPlayer(100, world);
   return {
@@ -120,6 +153,15 @@ export function createGame(
     pillars: (placements.pillars ?? []).map((r) => createPillar(r, pillarCenter(placements))),
     intro: { state: 'sleeping', t: 0 },
     invincible: false,
+    coconuts: (placements.coconuts ?? []).map((x) => createCoconut(x, world.groundY)),
+    held: 0,
+    thrown: [],
+    throwHeld: false,
+    facing: 1,
+    target: placements.target ?? null,
+    targetFlash: 0,
+    hitStop: 0,
+    impact: null,
   };
 }
 
@@ -127,7 +169,7 @@ export function createGame(
  * プレイヤーとボスの衝突解決。
  * - もぐっているボス(hidden)とは、接触しない(踏みつけも押し戻しも被弾もない)。
  * - 落下中かつ更新前の下辺がボス上辺付近なら踏みつけ(プレイヤーは跳ね返り、被弾しない)。ボスにダメージを与えるが、
- *   変身中(harmless)と、通常の状態の最終ボス(bounceOnly)にはダメージを与えない。気絶中(staggered)の最終ボスには体力 -4 で、短い起き上がりの時間(NUSHI_RECOVER_TIME)のあと気絶が解ける。転がっているボス(stompImmune)は踏みつけにならず、通常の接触になる。
+ *   最終ボス(ヌシ)は、気絶中・変身中も含めて、踏んでもダメージを受けない(ヤシの実を弱点に当てたときだけ)。転がっているボス(stompImmune)は踏みつけにならず、通常の接触になる。
  * - それ以外の重なりは水平方向のボスの端まで押し戻し、プレイヤーが無敵でなければ被弾(hit)として小さく跳ね上げる。
  *   無敵中は押し戻しだけ行い、ボスはすり抜けられない。変身中(harmless)は、押し戻しも被弾もない。
  */
@@ -146,18 +188,8 @@ function resolveBossContact(
   if (!amount) return { player, boss, hit: false };
 
   if (!flags.stompImmune && isStomp(prevPlayer.y, player.vy, rect.y)) {
-    // 変身中と、通常の状態の最終ボスは、踏んでもダメージがない(跳ね返るだけ)。気絶中は大ダメージで、気絶が解ける
-    const damaged = flags.staggered
-      ? boss.invuln > 0
-        ? boss
-        : (() => {
-            const d = damageBoss(boss, NUSHI_STAGGER_DAMAGE);
-            // 体力が 0 になったとき(撃破演出に入るとき)は、起き上がりの猶予は要らない
-            return { ...d, stagger: d.alive && d.dying <= 0 ? NUSHI_RECOVER_TIME : 0 };
-          })()
-      : flags.harmless || flags.bounceOnly
-        ? boss
-        : damageBoss(boss);
+    // 最終ボス(ヌシ)は、どの状態でも、踏んでもダメージがない(跳ね返るだけ)。変身中は、だれでもダメージがない
+    const damaged = boss.kind === 'nushi' || flags.harmless || flags.bounceOnly ? boss : damageBoss(boss);
     return {
       player: {
         ...player,
@@ -223,6 +255,16 @@ export function stepGame(
   if (state.intro.state === 'playing') {
     const t = state.intro.t + dt;
     return { ...state, intro: t >= INTRO_TIME ? { state: 'done', t: INTRO_TIME } : { state: 'playing', t } };
+  }
+
+  // 柱への衝突のヒットストップの間は、世界を止める(演出の時計と、的の光だけが進む)
+  if (state.hitStop > 0) {
+    return {
+      ...state,
+      hitStop: Math.max(0, state.hitStop - dt),
+      impact: tickImpact(state.impact, dt),
+      targetFlash: Math.max(0, state.targetFlash - dt),
+    };
   }
 
   // 立っている柱は、プレイヤーにとって通れない地形(崖と同じ)
@@ -297,12 +339,49 @@ export function stepGame(
   // ボスとの衝突(各体に順に適用)→ ザコ敵との衝突。被弾は 1 更新に 1 回
   let player = movedPlayer;
   let bossHit = false;
-  const bosses = movedBosses.map((b) => {
+  let bosses = movedBosses.map((b) => {
     const r = resolveBossContact(prevPlayer, player, b, world, invulnerable);
     player = r.player;
     bossHit = bossHit || r.hit;
     return r.boss;
   });
+
+  // ヤシの実: 飛んでいるものを動かし、当たりを調べ(地形・的・ヌシの弱点)、投げる操作を受け付ける
+  const inputDir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  const facing: 1 | -1 = inputDir !== 0 ? (inputDir as 1 | -1) : state.facing;
+  let held = state.held;
+  let targetFlash = Math.max(0, state.targetFlash - dt);
+  const keptThrown: Thrown[] = [];
+  const fallLine = fallYOf(world);
+  for (const t0 of state.thrown) {
+    const t = stepThrown(t0, dt);
+    const tr = thrownRect(t);
+    if (t.x < -50 || t.x > world.width || t.y > fallLine) continue;
+    if (solidsOf(world).some((s) => overlaps(tr, s))) continue;
+    if (state.target && overlaps(tr, state.target)) {
+      targetFlash = TARGET_FLASH_TIME;
+      continue;
+    }
+    let consumed = false;
+    bosses = bosses.map((b) => {
+      if (consumed || b.kind !== 'nushi' || !b.alive) return b;
+      const weak = weakPointOf(b);
+      if (weak && overlaps(tr, weak.rect)) {
+        consumed = true;
+        if (b.invuln > 0) return b; // 命中の直後は、続けて当たってもダメージを受けない
+        const d = damageBoss(b, weak.kind === 'stagger' ? NUSHI_STAGGER_DAMAGE : NUSHI_MOUTH_DAMAGE);
+        return d.alive && d.dying <= 0 ? { ...d, invuln: NUSHI_HIT_INVULN } : d;
+      }
+      if (overlaps(tr, bossRect(b))) consumed = true; // 体に当たったら、ダメージなしで消える
+      return b;
+    });
+    if (!consumed) keptThrown.push(t);
+  }
+  const thrown = [...keptThrown];
+  if (input.throw && !state.throwHeld && !locked && held > 0) {
+    thrown.push(throwCoconut(player, facing));
+    held -= 1;
+  }
   const enemyResult = resolveEnemyContact(prevPlayer, player, movedEnemies, invulnerable);
   player = enemyResult.player;
   const enemies = enemyResult.enemies;
@@ -318,6 +397,15 @@ export function stepGame(
 
   // 柱: ボスが気絶に入った更新で壊れる。壊れた柱は、条件がそろうと再生する
   let pillars = state.pillars;
+  // 突進が柱にぶつかった更新で、ヒットストップと衝突の演出を始める
+  let hitStop = 0;
+  let impact = tickImpact(state.impact, dt);
+  const staggerIdx = bosses.findIndex((b, i) => state.bosses[i]!.stagger <= 0 && b.stagger > 0);
+  if (staggerIdx >= 0) {
+    const sb = bosses[staggerIdx]!;
+    hitStop = HITSTOP_TIME;
+    impact = { t: 0, x: sb.aimDir < 0 ? sb.x : sb.x + sb.w, dir: sb.aimDir };
+  }
   // 突進がぶつかった衝撃で、柱は両方とも崩れる(片方だけが残ると、ヌシの反対側に取り残されたとき、詰むため)
   if (bosses.some((b, i) => state.bosses[i]!.stagger <= 0 && b.stagger > 0)) {
     pillars = breakAllPillars(pillars);
@@ -358,9 +446,16 @@ export function stepGame(
     finalPlayer = { ...player, x: SEA_X - PLAYER_WIDTH };
   }
 
+  // ヤシの実を拾う・補充する(ヌシが倒されたあとは補充しない)
+  const nushiAlive = bosses.some((b) => b.kind === 'nushi' && b.alive);
+  const pick = stepCoconuts(state.coconuts, playerRect(finalPlayer), held, dt, nushiAlive);
+  held = pick.held;
+
+  const nushiForm2 = bosses.some((b) => b.kind === 'nushi' && b.alive && b.form === 2);
   pillars = stepPillars(
     pillars,
     {
+      regrowTime: nushiForm2 ? PILLAR_REGROW_TIME_2 : PILLAR_REGROW_TIME,
       anyStaggered: bosses.some((b) => b.stagger > 0),
       blockers: [...bosses.filter((b) => b.alive).map(bossRect), playerRect(finalPlayer)],
       playerLeft: finalPlayer.x,
@@ -402,5 +497,21 @@ export function stepGame(
     pillars,
     intro,
     invincible: state.invincible,
+    coconuts: pick.coconuts,
+    held,
+    thrown,
+    throwHeld: input.throw,
+    facing,
+    target: state.target,
+    targetFlash,
+    hitStop,
+    impact,
   };
+}
+
+/** 衝突の演出の時計を進める。揺れ・擬音が終わったら null。 */
+function tickImpact(impact: GameState['impact'], dt: number): GameState['impact'] {
+  if (!impact) return null;
+  const t = impact.t + dt;
+  return t >= Math.max(IMPACT_SHAKE_TIME, IMPACT_TEXT_TIME) ? null : { ...impact, t };
 }

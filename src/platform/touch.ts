@@ -1,7 +1,7 @@
 import { type InputState } from '../core/input';
 import { NO_TOUCH, press, release, releaseAll, toInput, type TouchButton, type TouchState } from '../core/touch';
 
-const BUTTONS: readonly TouchButton[] = ['left', 'right', 'jump'];
+const BUTTONS: readonly TouchButton[] = ['left', 'right', 'jump', 'throw'];
 
 /**
  * 画面上のボタン(左・右・ジャンプ)と、画面タップによる決定を、InputState へ変換するアダプタ。

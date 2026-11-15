@@ -4,11 +4,13 @@ const LEFT_CODES = ['ArrowLeft', 'KeyA'];
 const RIGHT_CODES = ['ArrowRight', 'KeyD'];
 const JUMP_CODES = ['Space'];
 const CONFIRM_CODES = ['Enter', 'NumpadEnter'];
+const THROW_CODES = ['KeyX'];
 const HANDLED = new Set([
   ...LEFT_CODES,
   ...RIGHT_CODES,
   ...JUMP_CODES,
   ...CONFIRM_CODES,
+  ...THROW_CODES,
   'ArrowUp',
   'ArrowDown', // 隠しコマンド用(ゲームの操作には使わない)。ページのスクロールを防ぐ
 ]);
@@ -60,6 +62,7 @@ export class Keyboard {
       right: any(RIGHT_CODES),
       jump: any(JUMP_CODES),
       confirm: any(CONFIRM_CODES),
+      throw: any(THROW_CODES),
     };
   }
 }

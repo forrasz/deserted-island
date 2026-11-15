@@ -1,5 +1,6 @@
 import { BOSS_DEFS, createBoss, type Boss, type BossDef } from './boss';
-import { stepBossScript, type BossCtx, type BossStep } from './boss-scripts';
+import { stepBossScript, weakPointOf, type BossCtx, type BossStep } from './boss-scripts';
+import type { Thrown } from './coconut';
 import { FIXED_DT, GROUND_Y } from './config';
 import { stepGame, type GameState } from './game';
 import { NO_INPUT } from './input';
@@ -38,4 +39,11 @@ export function finishDying(g: GameState, maxTicks = 400): GameState {
   let s = g;
   for (let i = 0; i < maxTicks && s.bosses.some((b) => b.dying > 0); i++) s = stepGame(s, NO_INPUT, FIXED_DT);
   return s;
+}
+
+/** テスト用: ボスの弱点の中心に、止まったヤシの実を 1 個置く(次の更新で命中する)。弱点がなければ空。 */
+export function coconutAtWeak(b: Boss): Thrown[] {
+  const w = weakPointOf(b);
+  if (!w) return [];
+  return [{ x: w.rect.x + w.rect.w / 2 - 10, y: w.rect.y + w.rect.h / 2 - 10, vx: 0, vy: 0 }];
 }

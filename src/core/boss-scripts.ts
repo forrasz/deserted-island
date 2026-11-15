@@ -1,8 +1,11 @@
 import type { Boss } from './boss';
+import type { Rect } from './collision';
 import {
   BOSS_TRANSFORM_TIME,
   FIXED_DT,
+  NUSHI_LANDING_OPEN,
   NUSHI_STAGGER_TIME,
+  NUSHI_STAGGER_TIME_2,
   GRAVITY,
   PROJECTILE_SIZE,
   WAVE_WIDTH,
@@ -203,6 +206,37 @@ export function bossFlags(b: Boss): BossFlags {
   };
 }
 
+/** 弱点(頭)の判定の矩形の種類。stagger = 気絶中(かがんだ体の上部)、mouth = 口を開けている(弾の予備動作・強化形態の着地の隙)。 */
+export interface WeakPoint {
+  rect: Rect;
+  kind: 'stagger' | 'mouth';
+}
+
+/**
+ * 最終ボスの弱点。気絶中は、かがんだ体(高さ restH)の上部の帯(横は体の全幅。横から投げた実が、頭に届く前に体に当たって消えないように)、口を開けている間は、プレイヤーの側の前面の、立った姿の頭よりずっと低い位置(口)。
+ * それ以外(往復・突進・休み・変身中・撃破演出・眠っているとき・最終ボス以外)は null。ヤシの実の最高点(地面から約 90 px)で届く高さにする。
+ */
+export function weakPointOf(b: Boss): WeakPoint | null {
+  if (b.kind !== 'nushi' || !b.alive || b.dying > 0 || b.transformT > 0) return null;
+  if (b.stagger > 0) {
+    const h = b.restH ?? b.h;
+    const top = b.y + b.h - h;
+    return { rect: { x: b.x, y: top, w: b.w, h: Math.min(60, h) }, kind: 'stagger' };
+  }
+  const script = scriptOf(b);
+  const cur = script[b.step % script.length];
+  const prev = script[(b.step - 1 + script.length) % script.length];
+  const open =
+    // 弾の予備動作(次が shot の telegraph)
+    (cur?.a === 'telegraph' && script[(b.step + 1) % script.length]?.a === 'shot') ||
+    // 強化形態の、ジャンプの着地の隙(最初の NUSHI_LANDING_OPEN 秒)
+    (b.form === 2 && cur?.a === 'rest' && prev?.a === 'jump' && b.t < NUSHI_LANDING_OPEN);
+  if (!open) return null;
+  const mouthW = 70;
+  const x = b.aimDir > 0 ? b.x + b.w - mouthW : b.x;
+  return { rect: { x, y: b.y + b.h - 130, w: mouthW, h: 80 }, kind: 'mouth' };
+}
+
 /**
  * 1 回の固定ステップ分、ボスを更新する(行動の流れを進め、弾を出す)。
  * 乱数は使わず、同じ条件では同じ時間に同じ行動をする。撃破済みのボスは変化しない。
@@ -278,7 +312,7 @@ export function stepBossScript(boss: Boss, ctx: BossCtx, dt: number = FIXED_DT):
         const east = ctx.pillars?.east;
         const hitWest = dir < 0 && west != null && x <= west + 1e-6;
         const hitEast = dir > 0 && east != null && x + b.w >= east - 1e-6;
-        if (hitWest || hitEast) return { boss: { ...moved, vx: 0, stagger: NUSHI_STAGGER_TIME }, spawns };
+        if (hitWest || hitEast) return { boss: { ...moved, vx: 0, stagger: b.form === 2 ? NUSHI_STAGGER_TIME_2 : NUSHI_STAGGER_TIME }, spawns };
       }
       return { boss: t >= s.time ? next(moved, script) : moved, spawns };
     }

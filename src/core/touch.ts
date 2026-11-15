@@ -1,7 +1,7 @@
 import type { InputState } from './input';
 
 /** 画面上の操作ボタン。 */
-export type TouchButton = 'left' | 'right' | 'jump';
+export type TouchButton = 'left' | 'right' | 'jump' | 'throw';
 
 /**
  * ボタンごとに「押している指(pointerId)」の集合を持つ。
@@ -11,9 +11,10 @@ export interface TouchState {
   readonly left: ReadonlySet<number>;
   readonly right: ReadonlySet<number>;
   readonly jump: ReadonlySet<number>;
+  readonly throw: ReadonlySet<number>;
 }
 
-export const NO_TOUCH: TouchState = { left: new Set(), right: new Set(), jump: new Set() };
+export const NO_TOUCH: TouchState = { left: new Set(), right: new Set(), jump: new Set(), throw: new Set() };
 
 /** 指 pointerId が button を押した。 */
 export function press(state: TouchState, pointerId: number, button: TouchButton): TouchState {
@@ -32,8 +33,9 @@ export function release(state: TouchState, pointerId: number): TouchState {
   const left = next(state.left);
   const right = next(state.right);
   const jump = next(state.jump);
-  if (left === state.left && right === state.right && jump === state.jump) return state;
-  return { left, right, jump };
+  const thr = next(state.throw);
+  if (left === state.left && right === state.right && jump === state.jump && thr === state.throw) return state;
+  return { left, right, jump, throw: thr };
 }
 
 /** すべてのボタンを解除する(中断・ページ非表示・向きの変更など)。 */
@@ -48,6 +50,7 @@ export function toInput(state: TouchState, confirm = false): InputState {
     right: state.right.size > 0,
     jump: state.jump.size > 0,
     confirm,
+    throw: state.throw.size > 0,
   };
 }
 
@@ -58,6 +61,7 @@ export function mergeInput(a: InputState, b: InputState): InputState {
     right: a.right || b.right,
     jump: a.jump || b.jump,
     confirm: a.confirm || b.confirm,
+    throw: a.throw || b.throw,
   };
 }
 

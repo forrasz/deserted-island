@@ -4,6 +4,7 @@ import {
   FINAL_PILLAR_HEIGHT,
   FINAL_PILLAR_WIDTH,
   GROUND_Y,
+  TARGET_SIZE,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from './config';
@@ -53,6 +54,10 @@ export interface Stage {
   enemies: EnemyPlacement[];
   /** 最終ボスの闘技場の入口(西)と出口(東)に立つ、壊せる柱(通れない。ボスの突進が当たると壊れる)。 */
   pillars: Rect[];
+  /** ヤシの実の置き場所(左辺の x。地面の上)。西の柱の西側に 3 個、東の柱の東側に 2 個。 */
+  coconuts: number[];
+  /** 闘技場の手前の、練習用の的。 */
+  target: Rect;
 }
 
 /** ボスの往復範囲の左端(ボスの左辺 x)。10 か所の闘技場に 1 体ずつ。 */
@@ -287,6 +292,8 @@ function buildStage(): Stage {
     route,
     bosses,
     enemies,
+    coconuts: [FINAL_PILLAR_X - 220, FINAL_PILLAR_X - 170, FINAL_PILLAR_X - 120, FINAL_PILLAR_X + 560 + 60 + 80, FINAL_PILLAR_X + 560 + 60 + 130],
+    target: { x: FINAL_PILLAR_X - 70, y: GROUND_Y - 120, w: TARGET_SIZE, h: TARGET_SIZE },
     pillars: [
       { x: FINAL_PILLAR_X, y: GROUND_Y - FINAL_PILLAR_HEIGHT, w: FINAL_PILLAR_WIDTH, h: FINAL_PILLAR_HEIGHT },
       {

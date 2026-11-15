@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOSS_DEFS, bossRect, createBoss, damageBoss, type Boss } from './boss';
+import { BOSS_DEFS, createBoss, damageBoss, type Boss } from './boss';
 import { bossFlags, stepBossScript } from './boss-scripts';
-import { finishDying } from './boss-test-helpers';
+import { coconutAtWeak, finishDying } from './boss-test-helpers';
 import {
   DYING_TIME_SCALE,
   FIXED_DT,
@@ -20,14 +20,14 @@ const NUSHI = BOSS_DEFS[9]!;
 function nushi(over: Partial<Boss> = {}): Boss {
   return { ...createBoss(1000, 1000, 1000, GROUND_Y, NUSHI), vx: 0, hp: 4, transformed: true, form: 2, ...over };
 }
-/** 気絶中のヌシの、かがんだ上辺へ落ちるプレイヤーがいる世界(登場演出は済んでいる)。 */
+/** 気絶中のヌシの頭に、ヤシの実が当たる世界(登場演出は済んでいる。踏みつけではダメージを受けない)。 */
 function stompWorld(b: Boss, over: Partial<GameState> = {}): GameState {
-  const r = bossRect(b);
   return {
     ...createGame(undefined, { bosses: [], enemies: [] }),
     intro: { state: 'done', t: 3 },
     bosses: [b],
-    player: { x: b.x + 90, y: r.y - H - 5, vx: 0, vy: 300, onGround: false },
+    player: { x: 5000, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true },
+    thrown: coconutAtWeak(b),
     ...over,
   };
 }
