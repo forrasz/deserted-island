@@ -24,9 +24,9 @@ function falling(e: Enemy, gap = 5, vy = 300): { prev: Player; cur: Player } {
   return { prev, cur };
 }
 
-/** 地面に立って、敵の側面と 10px 重なっているプレイヤー。 */
+/** 地面に立って、敵の側面と 22px 重なっている(被弾判定どうしも 12px 重なる)プレイヤー。 */
 function side(e: Enemy): { prev: Player; cur: Player } {
-  const p: Player = { x: e.x - W + 10, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true };
+  const p: Player = { x: e.x - W + 22, y: GROUND_Y - H, vx: 0, vy: 0, onGround: true };
   return { prev: p, cur: p };
 }
 

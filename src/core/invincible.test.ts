@@ -42,7 +42,7 @@ describe('無敵モードの効果: 敵・ボス・弾', () => {
   it('オフのとき、ザコ敵に横から触れるとHPが 1 減る(従来どおり)', () => {
     const e = createEnemy('plodder', 1000, 1000, 1000, GROUND_Y, 0);
     const g = stepGame(
-      base({ enemies: [e], player: createPlayer(e.x - PLAYER_WIDTH + 10) }),
+      base({ enemies: [e], player: createPlayer(e.x - PLAYER_WIDTH + 22) }),
       NO_INPUT,
       FIXED_DT,
     );
@@ -53,7 +53,7 @@ describe('無敵モードの効果: 敵・ボス・弾', () => {
   it('オンのとき、ザコ敵に横から触れても、HPは減らず、無敵時間(点滅)も始まらない', () => {
     const e = createEnemy('plodder', 1000, 1000, 1000, GROUND_Y, 0);
     const g = step(
-      base({ invincible: true, enemies: [e], player: createPlayer(e.x - PLAYER_WIDTH + 10) }),
+      base({ invincible: true, enemies: [e], player: createPlayer(e.x - PLAYER_WIDTH + 22) }),
       30,
     );
     expect(g.hp).toBe(PLAYER_MAX_HP);

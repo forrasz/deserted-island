@@ -97,11 +97,11 @@ describe('ジャンプと重力', () => {
     expect(next.vy).toBeGreaterThan(air.vy);
   });
 
-  it('空中でも水平移動できる', () => {
-    const air = stepPlayer(createPlayer(100), JUMP);
+  it('右へ押しながら跳ぶと、空中でも踏み切りと同じ速さで右へ進む', () => {
+    const air = stepPlayer(createPlayer(100), { ...NO_INPUT, right: true, jump: true });
     const next = stepPlayer(air, RIGHT);
     expect(next.onGround).toBe(false);
-    expect(next.x).toBeGreaterThan(air.x);
+    expect(next.x - air.x).toBeCloseTo(MOVE_SPEED * FIXED_DT, 6);
   });
 });
 

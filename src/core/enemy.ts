@@ -8,6 +8,7 @@ import {
   CHASER_PATROL_SPEED,
   CHASER_RANGE,
   CHASER_SPEED,
+  ENEMY_HURT_SIZE,
   ENEMY_SIZE,
   FIXED_DT,
   FLOATER_AMPLITUDE,
@@ -83,6 +84,16 @@ const AIR_KINDS: readonly EnemyKind[] = ['floater', 'swooper'];
 
 export function enemyRect(e: Enemy): Rect {
   return { x: e.x, y: e.y, w: ENEMY_SIZE, h: ENEMY_SIZE };
+}
+
+/** 被弾判定の矩形。見た目(40×40)より小さい 32×32 で、下辺と左右の中心をそろえる。踏みつけには、見た目の矩形(enemyRect)を使う。 */
+export function enemyHurtRect(e: Enemy): Rect {
+  return {
+    x: e.x + (ENEMY_SIZE - ENEMY_HURT_SIZE) / 2,
+    y: e.y + (ENEMY_SIZE - ENEMY_HURT_SIZE),
+    w: ENEMY_HURT_SIZE,
+    h: ENEMY_HURT_SIZE,
+  };
 }
 
 /** 種類ごとの初期の段階。 */

@@ -59,8 +59,9 @@ describe('崖(壁)', () => {
     expect(p.x).toBeGreaterThanOrEqual(cliff.x + cliff.w - 1e-6);
   });
 
-  it('壁際でジャンプして右へ押し続けると、崖の上面に着地し、地面に接している状態になる', () => {
-    let p = standing(cliff.x - W - 20);
+  it('崖の少し手前からジャンプして右へ進むと、崖の上面に着地し、地面に接している状態になる', () => {
+    // 放物線が崖の上辺を越える位置から跳ぶ(空中では向きを変えられないので、踏み切りの位置で決まる)
+    let p = standing(cliff.x - W - 90);
     let landedOnTop = false;
     for (let i = 0; i < 120; i++) {
       p = stepPlayer(p, i === 0 ? RIGHT_JUMP : RIGHT, FIXED_DT, w);
@@ -68,6 +69,22 @@ describe('崖(壁)', () => {
     }
     expect(landedOnTop).toBe(true);
     expect(p.vy).toBeGreaterThanOrEqual(0);
+  });
+
+  it('壁際(20 px 手前)から跳ぶと、空中で崖の側面にぶつかって水平の速さが 0 になり、壁に沿って落ちて、地面に降りる', () => {
+    let p = standing(cliff.x - W - 20);
+    let hitWall = false;
+    let landedOnTop = false;
+    for (let i = 0; i < 120; i++) {
+      p = stepPlayer(p, i === 0 ? RIGHT_JUMP : RIGHT, FIXED_DT, w);
+      if (!p.onGround && p.vx === 0) hitWall = true;
+      if (p.onGround && Math.abs(p.y + H - cliff.y) < 0.5) landedOnTop = true;
+      expect(p.x + W).toBeLessThanOrEqual(cliff.x + 1e-6); // 崖の中へは入らない
+    }
+    expect(hitWall).toBe(true);
+    expect(landedOnTop).toBe(false);
+    expect(p.onGround).toBe(true);
+    expect(p.y + H).toBeCloseTo(GROUND, 5);
   });
 
   it('崖の上を歩いて端を越えると落下し、地面に降りる', () => {
@@ -152,7 +169,7 @@ describe('浮島(下から抜けられる足場)', () => {
   it('横から浮島に触れても、水平方向では止まらず、通り抜ける', () => {
     // 浮島の厚みの範囲の高さを、空中で水平に通過する(下降中は着地しない高さから開始)
     const mid = island.y + 5 - H + 30;
-    let p: Player = { x: 400, y: mid - 20, vx: 0, vy: -200, onGround: false };
+    let p: Player = { x: 400, y: mid - 20, vx: MOVE_SPEED, vy: -200, onGround: false }; // 右へ進みながら跳んだ空中
     let minVy = 0;
     for (let i = 0; i < 25; i++) {
       p = stepPlayer(p, RIGHT, FIXED_DT, w);

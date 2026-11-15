@@ -21,6 +21,9 @@ export const MAX_FALL_SPEED = 1500;
 
 export const PLAYER_WIDTH = 40;
 export const PLAYER_HEIGHT = 56;
+/** 被弾判定(ザコ敵・弾・衝撃波との重なり)の大きさ。見た目より小さく、下辺と左右の中心をそろえる。踏みつけ・地形・部品には、見た目の矩形を使う。 */
+export const PLAYER_HURT_WIDTH = 28;
+export const PLAYER_HURT_HEIGHT = 46;
 
 // --- ボス「カクレモモジリ」 ---
 export const BOSS_WIDTH = 80;
@@ -83,6 +86,8 @@ export const HEADROOM = 100;
 // --- ザコ敵(行動の数値。specs/enemy-catalog に対応) ---
 /** ザコ敵の当たり判定の大きさ(幅・高さ)と体力。 */
 export const ENEMY_SIZE = 40;
+/** ザコ敵の被弾判定の大きさ(見た目より小さい。下辺と左右の中心をそろえる)。 */
+export const ENEMY_HURT_SIZE = 32;
 export const ENEMY_HP = 1;
 
 /** のろのろ・ちょこまか: 往復の速さ(px/s)。 */

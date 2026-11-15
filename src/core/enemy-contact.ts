@@ -1,7 +1,7 @@
 import { overlaps } from './collision';
-import { isStomp, playerRect } from './contact';
+import { isStomp, playerHurtRect, playerRect } from './contact';
 import { HIT_BOUNCE_SPEED, PLAYER_HEIGHT, STOMP_BOUNCE_SPEED } from './config';
-import { enemyRect, type Enemy } from './enemy';
+import { enemyHurtRect, enemyRect, type Enemy } from './enemy';
 import type { Player } from './player';
 
 export interface EnemyContactResult {
@@ -16,7 +16,7 @@ export interface EnemyContactResult {
 /**
  * プレイヤーとザコ敵の接触。
  * - 上から踏みつけた(落下中かつ更新前の下辺が上辺付近): その敵を倒し、プレイヤーを跳ね返す。被弾しない。
- * - それ以外の重なり: 無敵でなければ被弾(小さく跳ね上がる)。ボスと違い、押し戻さない(無敵の間は通り抜ける)。
+ * - それ以外で、被弾判定(見た目より小さい矩形)どうしが重なったとき: 無敵でなければ被弾(小さく跳ね上がる)。ボスと違い、押し戻さない(無敵の間は通り抜ける)。
  * - 倒された敵・隠れている敵とは接触しない。
  * - 同じ更新で踏みつけが成立したら、被弾しない(踏みつけを優先)。
  */
@@ -38,7 +38,8 @@ export function resolveEnemyContact(
       p = { ...p, y: e.y - PLAYER_HEIGHT, vy: -STOMP_BOUNCE_SPEED, onGround: false };
       return { ...e, alive: false };
     }
-    touched = true;
+    // 被弾は、見た目より小さい被弾判定どうしが重なったときだけ(掠っただけでは当たらない)
+    if (overlaps(playerHurtRect(p), enemyHurtRect(e))) touched = true;
     return e;
   });
 

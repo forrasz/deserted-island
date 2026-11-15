@@ -1,6 +1,6 @@
 import type { Rect } from './collision';
 import { overlaps } from './collision';
-import { playerRect } from './contact';
+import { playerHurtRect } from './contact';
 import {
   ARC_LIFE,
   FIXED_DT,
@@ -96,7 +96,7 @@ export interface ProjectileContactResult {
 
 /**
  * プレイヤーと弾・衝撃波の接触。
- * 重なったら、無敵でなければ被弾(小さく跳ね上がる)にして、その弾を消す。無敵の間は被弾せず、弾は消えずに通り抜ける。
+ * プレイヤーの被弾判定(見た目より小さい矩形)と重なったら、無敵でなければ被弾(小さく跳ね上がる)にして、その弾を消す。無敵の間は被弾せず、弾は消えずに通り抜ける。
  * 弾は踏んでも倒せない(常に接触として扱う)。
  */
 export function resolveProjectileContact(
@@ -104,7 +104,7 @@ export function resolveProjectileContact(
   projectiles: Projectile[],
   invulnerable: boolean,
 ): ProjectileContactResult {
-  const pr = playerRect(player);
+  const pr = playerHurtRect(player);
   let hit = false;
   const next = projectiles.map((p) => {
     if (!p.alive || !overlaps(pr, projectileRect(p))) return p;

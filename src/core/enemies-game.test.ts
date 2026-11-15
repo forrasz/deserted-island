@@ -93,7 +93,7 @@ describe('ザコ敵との接触(統合)', () => {
 
   it('横から触れるとHPが 1 減り、2 秒の無敵になり、小さく跳ね上がる', () => {
     const e = enemy('plodder', 1000);
-    const player = createPlayer(e.x - PLAYER_WIDTH + 10);
+    const player = createPlayer(e.x - PLAYER_WIDTH + 22);
     const g = stepGame(world([e], [], { player }), NO_INPUT, FIXED_DT);
     expect(g.hp).toBe(PLAYER_MAX_HP - 1);
     expect(g.hitInvuln).toBe(PLAYER_INVULN_TIME);
@@ -102,7 +102,7 @@ describe('ザコ敵との接触(統合)', () => {
 
   it('無敵の間は、重なったまま更新しても被弾せず、敵を通り抜けられる(押し戻されない)', () => {
     const e = enemy('plodder', 1000);
-    let g = stepGame(world([e], [], { player: createPlayer(e.x - PLAYER_WIDTH + 10) }), NO_INPUT, FIXED_DT);
+    let g = stepGame(world([e], [], { player: createPlayer(e.x - PLAYER_WIDTH + 22) }), NO_INPUT, FIXED_DT);
     for (let i = 0; i < 60; i++) g = stepGame(g, { ...NO_INPUT, right: true }, FIXED_DT);
     expect(g.hp).toBe(PLAYER_MAX_HP - 1);
     expect(g.player.x).toBeGreaterThan(e.x + ENEMY_SIZE); // 通り抜けた
@@ -110,10 +110,10 @@ describe('ザコ敵との接触(統合)', () => {
 
   it('無敵が終わったあとに重なっていると、再び被弾する', () => {
     const e = enemy('plodder', 1000);
-    let g = stepGame(world([e], [], { player: createPlayer(e.x - PLAYER_WIDTH + 10) }), NO_INPUT, FIXED_DT);
+    let g = stepGame(world([e], [], { player: createPlayer(e.x - PLAYER_WIDTH + 22) }), NO_INPUT, FIXED_DT);
     // 無敵が切れるまで待ち(その間は敵と重なる位置に戻す)、再び接触させる
     for (let i = 0; i < 130; i++) {
-      g = stepGame({ ...g, player: createPlayer(e.x - PLAYER_WIDTH + 10) }, NO_INPUT, FIXED_DT);
+      g = stepGame({ ...g, player: createPlayer(e.x - PLAYER_WIDTH + 22) }, NO_INPUT, FIXED_DT);
     }
     expect(g.hp).toBe(PLAYER_MAX_HP - 2);
   });
@@ -121,7 +121,7 @@ describe('ザコ敵との接触(統合)', () => {
   it('HP が 1 のときに触れると、HP 0 で死亡する', () => {
     const e = enemy('plodder', 1000);
     const g = stepGame(
-      world([e], [], { player: createPlayer(e.x - PLAYER_WIDTH + 10), hp: 1 }),
+      world([e], [], { player: createPlayer(e.x - PLAYER_WIDTH + 22), hp: 1 }),
       NO_INPUT,
       FIXED_DT,
     );
