@@ -165,6 +165,8 @@ const LOCAL_MARGIN = 600;
 const MAX_TICKS = 240;
 const RUN_UP_STEP = 20;
 const RUN_UP_MAX = 420;
+/** 到達可能性の検査で、ジャンプを押し続ける更新の数(上昇の約 0.375 秒より十分長い)。 */
+const JUMP_HOLD_TICKS = 50;
 const JUMP_TICKS: number[] = [-1, ...Array.from({ length: 26 }, (_, k) => k * 2)];
 
 /** 判定を速くするため、2 つの足場の周辺の地形だけを持つ世界を作る。 */
@@ -194,7 +196,8 @@ function attempt(
       ...NO_INPUT,
       right: dir > 0,
       left: dir < 0,
-      jump: t === jumpTick,
+      // ジャンプは、上昇の間、押し続ける(可変ジャンプでは、すぐ離すと低く跳ぶため)。jumpTick が負なら、押さない
+      jump: jumpTick >= 0 && t >= jumpTick && t < jumpTick + JUMP_HOLD_TICKS,
     };
     p = stepPlayer(p, input, FIXED_DT, w);
     if (p.y > fallY) return false;

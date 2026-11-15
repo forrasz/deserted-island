@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FIXED_DT, GROUND_Y, MOVE_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH } from './config';
+import { FIXED_DT, GROUND_ACCEL, GROUND_Y, MOVE_SPEED, PLAYER_HEIGHT, PLAYER_WIDTH } from './config';
 import { NO_INPUT, type InputState } from './input';
 import { createPlayer, stepPlayer, type Player, type WorldBounds } from './player';
 
@@ -43,15 +43,19 @@ describe('左右移動', () => {
     }
   });
 
-  it('1 秒間の移動距離は移動速度に等しい', () => {
+  it('1 秒間の移動距離は、最高速まで加速するぶん(約 0.16 秒の加速で約 22 px)だけ、速さ × 時間より短い', () => {
     const p = run(createPlayer(100), RIGHT, 60);
-    expect(p.x).toBeCloseTo(100 + MOVE_SPEED, 5);
+    const accelLoss = (MOVE_SPEED * MOVE_SPEED) / (2 * GROUND_ACCEL); // 加速の間に、最高速より遅れる距離
+    expect(Math.abs(p.x - (100 + MOVE_SPEED - accelLoss))).toBeLessThan(3);
+    expect(p.vx).toBe(MOVE_SPEED);
   });
 
-  it('キーを離すと x が変化しなくなる', () => {
-    const moving = run(createPlayer(100), RIGHT, 10);
-    const stopped = run(moving, NO_INPUT, 10);
-    expect(stopped.x).toBe(moving.x);
+  it('キーを離すと、少し滑って止まり、そのあと x が変化しなくなる', () => {
+    const moving = run(createPlayer(100), RIGHT, 30); // 最高速
+    const stopped = run(moving, NO_INPUT, 30);
+    expect(stopped.x).toBeGreaterThan(moving.x); // 滑る
+    expect(stopped.x - moving.x).toBeLessThan(25);
+    expect(run(stopped, NO_INPUT, 10).x).toBe(stopped.x);
   });
 
   it('左右同時押しでは x が変化しない', () => {
@@ -91,17 +95,18 @@ describe('ジャンプと重力', () => {
   });
 
   it('空中ではジャンプ入力を与えても上向き速度は与えられない', () => {
-    const air = run(stepPlayer(createPlayer(), JUMP), NO_INPUT, 40);
+    const air = run(stepPlayer(createPlayer(), JUMP), NO_INPUT, 10);
     expect(air.onGround).toBe(false);
     const next = stepPlayer(air, JUMP);
     expect(next.vy).toBeGreaterThan(air.vy);
   });
 
-  it('右へ押しながら跳ぶと、空中でも踏み切りと同じ速さで右へ進む', () => {
-    const air = stepPlayer(createPlayer(100), { ...NO_INPUT, right: true, jump: true });
-    const next = stepPlayer(air, RIGHT);
+  it('右へ押しながら跳ぶと、空中でも右へ進み続ける(キーを離しても、速さは保たれる)', () => {
+    const air = run(createPlayer(100), RIGHT, 30); // 最高速
+    const jumped = stepPlayer(air, { ...NO_INPUT, right: true, jump: true });
+    const next = stepPlayer(jumped, NO_INPUT);
     expect(next.onGround).toBe(false);
-    expect(next.x - air.x).toBeCloseTo(MOVE_SPEED * FIXED_DT, 6);
+    expect(next.x - jumped.x).toBeCloseTo(MOVE_SPEED * FIXED_DT, 6);
   });
 });
 

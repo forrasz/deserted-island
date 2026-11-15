@@ -117,10 +117,12 @@ describe('広間とプレイヤー', () => {
     expect(b.items).toEqual([]);
     expect(BONUS_WORLD.width).toBe(BONUS_WIDTH);
   });
-  it('本編と同じ速さ(毎秒 280)で右へ動く', () => {
+  it('本編と同じ速さ(最高速は毎秒 280)で右へ動く', () => {
     const b = fresh();
     const r = run(b, 60, RIGHT);
-    expect(r.bonus.player.x - b.player.x).toBeCloseTo(MOVE_SPEED, 0);
+    expect(r.bonus.player.vx).toBe(MOVE_SPEED);
+    expect(r.bonus.player.x - b.player.x).toBeGreaterThan(MOVE_SPEED - 30); // 加速のぶんだけ短い
+    expect(r.bonus.player.x - b.player.x).toBeLessThan(MOVE_SPEED);
   });
   it('本編と同じ初速でジャンプする', () => {
     const r = run(fresh(), 1, JUMP);

@@ -16,6 +16,17 @@ export const MAX_FRAME_MS = 250;
 export const GRAVITY = 2000;
 export const JUMP_SPEED = 750;
 export const MOVE_SPEED = 280;
+/** 地上の加速(停止から最高速まで約 0.16 秒)・減速(キーを離してから止まるまで約 0.12 秒)・ブレーキ(進む向きと反対のキー)の強さ(px/s²)。 */
+export const GROUND_ACCEL = 1800;
+export const GROUND_DECEL = 2400;
+export const TURN_ACCEL = 3600;
+/** 空中の加速は、地上の加速のこの割合(キーを離しても、空中では減速しない)。 */
+export const AIR_ACCEL_RATIO = 0.6;
+/** ジャンプ中にキーを離したとき、上向きの速さがこの値(px/s)に打ち切られる(可変ジャンプ)。 */
+export const JUMP_CUT_SPEED = 400;
+/** 足場を離れてからもジャンプできる時間(コヨーテタイム)と、着地の前に押したジャンプを覚えておく時間(先行入力)(秒)。 */
+export const COYOTE_TIME = 0.1;
+export const JUMP_BUFFER = 0.1;
 /** 落下速度の上限(px/s)。高い所から落ちても足場をすり抜けないようにする。 */
 export const MAX_FALL_SPEED = 1500;
 

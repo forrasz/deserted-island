@@ -136,10 +136,11 @@ describe('踏みつけ', () => {
     const boss = stillBoss({ x: 300, left: 300, right: 300 });
     let g = withBoss(boss, createPlayer(300 - PLAYER_WIDTH - 40));
     // 右へ歩きながらジャンプし、ボスの上に着地する軌道
+    for (let i = 0; i < 20; i++) g = stepGame(g, RIGHT, FIXED_DT); // 助走(加速)
     g = stepGame(g, { ...RIGHT, jump: true }, FIXED_DT);
     let hit = false;
     for (let i = 0; i < 120 && !hit; i++) {
-      g = stepGame(g, RIGHT, FIXED_DT);
+      g = stepGame(g, { ...RIGHT, jump: i < 20 }, FIXED_DT); // 上昇の間は、ジャンプを押し続ける
       hit = g.bosses[0]!.hp < BOSS_MAX_HP;
     }
     expect(hit).toBe(true);

@@ -17,7 +17,6 @@ const W = PLAYER_WIDTH;
 const RIGHT: InputState = { ...NO_INPUT, right: true };
 const LEFT: InputState = { ...NO_INPUT, left: true };
 const JUMP: InputState = { ...NO_INPUT, jump: true };
-const RIGHT_JUMP: InputState = { ...NO_INPUT, right: true, jump: true };
 
 const GROUND = 1000;
 const HEIGHT = 1080;
@@ -60,29 +59,40 @@ describe('崖(壁)', () => {
   });
 
   it('崖の少し手前からジャンプして右へ進むと、崖の上面に着地し、地面に接している状態になる', () => {
-    // 放物線が崖の上辺を越える位置から跳ぶ(空中では向きを変えられないので、踏み切りの位置で決まる)
-    let p = standing(cliff.x - W - 90);
+    // 放物線が崖の上辺を越える位置から、ジャンプを押し続けて跳ぶ
+    let p = standing(cliff.x - W - 120);
     let landedOnTop = false;
     for (let i = 0; i < 120; i++) {
-      p = stepPlayer(p, i === 0 ? RIGHT_JUMP : RIGHT, FIXED_DT, w);
+      p = stepPlayer(p, { ...RIGHT, jump: i < 30 }, FIXED_DT, w);
       if (p.onGround && Math.abs(p.y + H - cliff.y) < 0.5) landedOnTop = true;
     }
     expect(landedOnTop).toBe(true);
     expect(p.vy).toBeGreaterThanOrEqual(0);
   });
 
-  it('壁際(20 px 手前)から跳ぶと、空中で崖の側面にぶつかって水平の速さが 0 になり、壁に沿って落ちて、地面に降りる', () => {
-    let p = standing(cliff.x - W - 20);
+  it('壁際(8 px 手前)から、ジャンプを押し続けて跳ぶと、空中で崖の側面にぶつかって水平の速さが 0 になり、崖の中へは入らず、上昇して上辺を越えると、上面に乗れる', () => {
+    let p = standing(cliff.x - W - 8);
     let hitWall = false;
     let landedOnTop = false;
     for (let i = 0; i < 120; i++) {
-      p = stepPlayer(p, i === 0 ? RIGHT_JUMP : RIGHT, FIXED_DT, w);
+      p = stepPlayer(p, { ...RIGHT, jump: i < 30 }, FIXED_DT, w);
       if (!p.onGround && p.vx === 0) hitWall = true;
       if (p.onGround && Math.abs(p.y + H - cliff.y) < 0.5) landedOnTop = true;
-      expect(p.x + W).toBeLessThanOrEqual(cliff.x + 1e-6); // 崖の中へは入らない
+      // 崖の中へは入らない(上辺を越えて、上に乗るのは良い)
+      const inside =
+        p.x + W > cliff.x + 1e-6 && p.x < cliff.x + cliff.w - 1e-6 && p.y + H > cliff.y + 1e-3 && p.y < cliff.y + cliff.h;
+      expect(inside).toBe(false);
     }
     expect(hitWall).toBe(true);
-    expect(landedOnTop).toBe(false);
+    expect(landedOnTop).toBe(true); // 空中でも右キーで少し進めるので、上辺を越えたあと、崖の上に乗れる
+  });
+
+  it('壁際から、ジャンプをすぐ離して低く跳ぶと、崖の側面にぶつかって、壁に沿って落ち、地面に降りる(上には乗れない)', () => {
+    let p = standing(cliff.x - W - 8);
+    for (let i = 0; i < 120; i++) {
+      p = stepPlayer(p, { ...RIGHT, jump: i < 3 }, FIXED_DT, w); // 低いジャンプ(崖の高さ 100 に届かない)
+      expect(p.x + W).toBeLessThanOrEqual(cliff.x + 1e-6);
+    }
     expect(p.onGround).toBe(true);
     expect(p.y + H).toBeCloseTo(GROUND, 5);
   });
@@ -97,7 +107,7 @@ describe('崖(壁)', () => {
   it('崖の上にとどまっている間、位置は変化しない', () => {
     const top = standing(650, cliff.y - H);
     const p = run(top, NO_INPUT, 60, w);
-    expect(p).toEqual({ ...top, vy: 0, onGround: true });
+    expect(p).toMatchObject({ x: top.x, y: top.y, vx: 0, vy: 0, onGround: true });
   });
 });
 
@@ -130,7 +140,7 @@ describe('浮島(下から抜けられる足場)', () => {
     let passedThrough = false;
     let landed = false;
     for (let i = 0; i < 120; i++) {
-      p = stepPlayer(p, i === 0 ? JUMP : NO_INPUT, FIXED_DT, w);
+      p = stepPlayer(p, { ...NO_INPUT, jump: i < 30 }, FIXED_DT, w);
       if (p.vy < 0 && p.y + H < island.y + island.h && p.y + H > island.y) passedThrough = true;
       if (p.onGround && Math.abs(p.y + H - island.y) < 0.5) landed = true;
     }
