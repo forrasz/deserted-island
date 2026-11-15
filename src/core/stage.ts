@@ -54,8 +54,8 @@ export interface Stage {
   enemies: EnemyPlacement[];
   /** 最終ボスの闘技場の入口(西)と出口(東)に立つ、壊せる柱(通れない。ボスの突進が当たると壊れる)。 */
   pillars: Rect[];
-  /** ヤシの実の置き場所(左辺の x。地面の上)。西の柱の西側に 3 個、東の柱の東側に 2 個。 */
-  coconuts: number[];
+  /** ヤシの木(幹の中心の x)。各ボスの闘技場の手前に 1 本ずつ、計 10 本。 */
+  palms: number[];
   /** 闘技場の手前の、練習用の的。 */
   target: Rect;
 }
@@ -71,6 +71,13 @@ export const BOSS_LEFTS: readonly number[] = [
  */
 export const FINAL_PILLAR_X = BOSS_LEFTS[BOSS_LEFTS.length - 1]! - FINAL_PILLAR_WIDTH;
 /** 東の柱の位置(左辺 x)。柱の西の縁が、ヌシの往復範囲の右端のヌシの右辺(範囲の右端 + 本体の幅)になる。 */
+
+/**
+ * ヤシの木(幹の中心の x)。各ボスの闘技場の手前(往復範囲の左端より 150 px 以上西)の、
+ * 穴・崖・浮島・敵とボスの範囲に重ならない、平らな場所。1 本目はスタートの近く、10 本目はヌシの手前。
+ * (配置は stage-check の検査で守られる)
+ */
+const PALM_XS: number[] = [500, 2150, 5920, 9610, 13610, 17230, 20230, 21400, 22410, 23450];
 
 /** 浮島の厚み(px)。 */
 const ISLAND_THICKNESS = 20;
@@ -292,8 +299,8 @@ function buildStage(): Stage {
     route,
     bosses,
     enemies,
-    coconuts: [FINAL_PILLAR_X - 220, FINAL_PILLAR_X - 170, FINAL_PILLAR_X - 120, FINAL_PILLAR_X + 560 + 60 + 80, FINAL_PILLAR_X + 560 + 60 + 130],
-    target: { x: FINAL_PILLAR_X - 70, y: GROUND_Y - 120, w: TARGET_SIZE, h: TARGET_SIZE },
+    palms: PALM_XS,
+    target: { x: FINAL_PILLAR_X - 200, y: GROUND_Y - 120, w: TARGET_SIZE, h: TARGET_SIZE },
     pillars: [
       { x: FINAL_PILLAR_X, y: GROUND_Y - FINAL_PILLAR_HEIGHT, w: FINAL_PILLAR_WIDTH, h: FINAL_PILLAR_HEIGHT },
       {

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { overlaps } from './collision';
 import {
   COCONUT_GRAVITY,
+  COCONUT_LIFETIME,
   COCONUT_MAX_HELD,
-  COCONUT_RESPAWN_TIME,
+  COCONUT_SIZE,
   FIXED_DT,
   GROUND_Y,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
 } from './config';
-import { coconutRect, createCoconut, stepCoconuts, stepThrown, throwCoconut, thrownRect } from './coconut';
+import { dropCoconut, stepCoconuts, stepThrown, throwCoconut, thrownRect } from './coconut';
 import { createGame, stepGame, type GameState } from './game';
 import { NO_INPUT, type InputState } from './input';
 import { STAGE } from './stage';
@@ -20,8 +20,8 @@ const H = PLAYER_HEIGHT;
 const none = { bosses: [], enemies: [] };
 
 /** プレイヤーが x に立つ、敵なしで、ヤシの実が coconuts の位置にある世界。 */
-function arena(over: Partial<GameState> = {}, coconuts: number[] = []): GameState {
-  return { ...createGame(undefined, { ...none, coconuts }), player: createPlayer(1000), ...over };
+function arena(over: Partial<GameState> = {}): GameState {
+  return { ...createGame(undefined, { ...none }), player: createPlayer(1000), ...over };
 }
 const run = (g: GameState, input: InputState, n: number): GameState => {
   let s = g;
@@ -29,83 +29,56 @@ const run = (g: GameState, input: InputState, n: number): GameState => {
   return s;
 };
 
-describe('ヤシの実の置き場所', () => {
-  it('西の柱の西側に 3 個、東の柱の東側に 2 個あり、柱・ヌシの範囲と重ならず、平らな地面の上にある', () => {
-    const [west, east] = STAGE.pillars as [(typeof STAGE.pillars)[0], (typeof STAGE.pillars)[0]];
-    expect(STAGE.coconuts).toHaveLength(5);
-    const nushi = STAGE.bosses[9]!;
-    const nushiRange = { x: nushi.left, y: GROUND_Y - 250, w: nushi.right - nushi.left + nushi.def.w, h: 250 };
-    STAGE.coconuts.forEach((x, i) => {
-      const r = coconutRect(createCoconut(x, GROUND_Y));
-      expect(r.y + r.h).toBe(GROUND_Y);
-      if (i < 3) expect(x + r.w).toBeLessThanOrEqual(west.x);
-      else expect(x).toBeGreaterThanOrEqual(east.x + east.w);
-      expect(overlaps(r, nushiRange)).toBe(false);
-      for (const p of STAGE.pillars) expect(overlaps(r, p)).toBe(false);
-      // 平らな地面(穴・崖・浮島のない区間)
-      expect(STAGE.pits.some((pit) => x < pit.x + pit.w && pit.x < x + r.w)).toBe(false);
-      expect(STAGE.cliffs.some((c) => overlaps(r, c))).toBe(false);
-    });
-  });
-
-  it('練習用の的は、西の柱の西側の外にあり、プレイヤーの頭より少し上にある', () => {
-    const west = STAGE.pillars[0]!;
-    expect(STAGE.target.x + STAGE.target.w).toBeLessThanOrEqual(west.x);
-    expect(STAGE.target.y).toBeLessThan(GROUND_Y - H);
-  });
-
-  it('createGame は、置き場所のとおりに、手持ち 0 で始まる', () => {
-    const g = createGame();
-    expect(g.coconuts.map((c) => c.x)).toEqual(STAGE.coconuts);
-    expect(g.coconuts.every((c) => c.alive)).toBe(true);
-    expect(g.held).toBe(0);
-    expect(g.target).toEqual(STAGE.target);
-  });
-});
-
-describe('ヤシの実を拾う・補充', () => {
+describe('落ちるヤシの実と拾う', () => {
   const at = (x: number) => ({ x, y: GROUND_Y - H, w: PLAYER_WIDTH, h: H });
+  const step = (cs: ReturnType<typeof dropCoconut>[], player: ReturnType<typeof at>, held: number, n = 1) => {
+    let r = { coconuts: cs, held };
+    for (let i = 0; i < n; i++) r = stepCoconuts(r.coconuts, player, r.held, GROUND_Y, FIXED_DT);
+    return r;
+  };
 
-  it('触れると拾い、手持ちが 1 個増える', () => {
-    const r = stepCoconuts([createCoconut(1000, GROUND_Y)], at(1000), 0, FIXED_DT, true);
+  it('落ちてくる実は、重力で地面まで落ちて止まり、その位置に置かれる', () => {
+    const r = step([dropCoconut(1000, GROUND_Y - 200)], at(0), 0, 120);
+    const c = r.coconuts[0]!;
+    expect(c.landed).toBe(true);
+    expect(c.y + COCONUT_SIZE).toBe(GROUND_Y);
+    expect(c.x + COCONUT_SIZE / 2).toBe(1000);
+  });
+
+  it('地面に着いてから 30 秒で消える(拾われなければ)', () => {
+    let r = step([dropCoconut(1000, GROUND_Y - 200)], at(0), 0, 45); // 着地(約 35 更新)
+    r = step(r.coconuts, at(0), 0, Math.round(COCONUT_LIFETIME * 60) - 20);
+    expect(r.coconuts).toHaveLength(1);
+    r = step(r.coconuts, at(0), 0, 20);
+    expect(r.coconuts).toHaveLength(0);
+  });
+
+  it('触れると拾い、手持ちが 1 個増える(落ちている途中でも拾える)', () => {
+    const falling = { ...dropCoconut(1000, GROUND_Y - 70), vy: 0 };
+    const r = step([falling], at(1000), 0);
     expect(r.held).toBe(1);
-    expect(r.coconuts[0]!.alive).toBe(false);
+    expect(r.coconuts).toHaveLength(0);
   });
 
   it('手持ちが 2 個のときは、拾わず、地面に残る', () => {
-    const r = stepCoconuts([createCoconut(1000, GROUND_Y)], at(1000), COCONUT_MAX_HELD, FIXED_DT, true);
+    const r = step([dropCoconut(1000, GROUND_Y - COCONUT_SIZE)], at(1000), COCONUT_MAX_HELD, 3);
     expect(r.held).toBe(COCONUT_MAX_HELD);
-    expect(r.coconuts[0]!.alive).toBe(true);
+    expect(r.coconuts).toHaveLength(1);
   });
 
-  it('拾って離れてから 10 秒後に、同じ位置に出現する', () => {
-    let cs = stepCoconuts([createCoconut(1000, GROUND_Y)], at(1000), 0, FIXED_DT, true).coconuts;
-    for (let i = 0; i < Math.round(COCONUT_RESPAWN_TIME * 60) - 2; i++) cs = stepCoconuts(cs, at(0), 1, FIXED_DT, true).coconuts;
-    expect(cs[0]!.alive).toBe(false);
-    for (let i = 0; i < 5; i++) cs = stepCoconuts(cs, at(0), 1, FIXED_DT, true).coconuts;
-    expect(cs[0]!.alive).toBe(true);
-    expect(cs[0]!.x).toBe(1000);
+  it('ゲームの始まりは、ヤシの実が落ちておらず、手持ち 0。再プレイでも同じ', () => {
+    const g = createGame();
+    expect(g.coconuts).toEqual([]);
+    expect(g.held).toBe(0);
+    expect(g.palms).toHaveLength(10);
+    expect(g.target).toEqual(STAGE.target);
   });
 
-  it('プレイヤーが重なっている間は出現せず、離れてから出現する(手持ちが上限でも)', () => {
-    let cs = [{ ...createCoconut(1000, GROUND_Y), alive: false, respawnT: COCONUT_RESPAWN_TIME + 1 }];
-    cs = stepCoconuts(cs, at(1000), COCONUT_MAX_HELD, FIXED_DT, true).coconuts;
-    expect(cs[0]!.alive).toBe(false);
-    cs = stepCoconuts(cs, at(0), COCONUT_MAX_HELD, FIXED_DT, true).coconuts;
-    expect(cs[0]!.alive).toBe(true);
-  });
-
-  it('ヌシが倒されたあと(canRespawn が false)は、補充しない', () => {
-    let cs = [{ ...createCoconut(1000, GROUND_Y), alive: false, respawnT: 0 }];
-    for (let i = 0; i < 700; i++) cs = stepCoconuts(cs, at(0), 0, FIXED_DT, false).coconuts;
-    expect(cs[0]!.alive).toBe(false);
-  });
-
-  it('ゲームの中で、拾うと手持ちが増え、再プレイ(createGame)で 0 に戻る', () => {
-    let g = arena({ player: createPlayer(1000) }, [1010]);
-    g = run(g, NO_INPUT, 2);
+  it('ゲームの中で、落ちてきた実を拾うと手持ちが増える', () => {
+    let g = arena({ player: createPlayer(1000), coconuts: [dropCoconut(1020, GROUND_Y - 100)] });
+    g = run(g, NO_INPUT, 40);
     expect(g.held).toBe(1);
-    expect(createGame().held).toBe(0);
+    expect(g.coconuts).toHaveLength(0);
   });
 });
 

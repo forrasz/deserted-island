@@ -10,6 +10,7 @@ import {
   MAX_GAP_HIGH,
   MAX_PIT_WIDTH,
   MAX_RISE,
+  PALM_CANOPY_HALF,
   PLAYER_WIDTH,
   PLAYER_HEIGHT,
   WORLD_HEIGHT,
@@ -141,6 +142,34 @@ export function validatePlacements(stage: Stage): string[] {
     if (dash && dash.a === 'dash' && finalBoss.right - finalBoss.left > dash.speed * dash.time) {
       errors.push('ヌシの突進が、往復範囲の東端から柱に届かない');
     }
+  }
+
+  // ヤシの木: 10 本(各ボスの闘技場の手前)。幹と梢の範囲が、穴・崖・浮島・ボスとザコ敵の往復範囲・柱・隠し穴と重ならない
+  if (stage.palms.length !== 10) errors.push(`ヤシの木が 10 本ではない: ${stage.palms.length}`);
+  for (const [i, x] of stage.palms.entries()) {
+    const x0 = x - PALM_CANOPY_HALF;
+    const x1 = x + PALM_CANOPY_HALF;
+    if (touchesFeature(stage, x0, x1)) errors.push(`ヤシの木 ${i} の周りに穴・崖・浮島がある: ${x0}〜${x1}`);
+    for (const [j, b] of stage.bosses.entries()) {
+      if (overlapsRange(x0, x1, b.left, b.right + b.def.w)) errors.push(`ヤシの木 ${i} がボス ${j} の範囲と重なる`);
+    }
+    const own = stage.bosses[i];
+    const prevB = stage.bosses[i - 1];
+    if (own && x > own.left - 150) errors.push(`ヤシの木 ${i} が、ボス ${i} の闘技場の手前(150 px 以上西)にない`);
+    if (prevB && x < prevB.right + prevB.def.w) errors.push(`ヤシの木 ${i} が、前のボスの範囲より東にない`);
+    for (const [j, e] of stage.enemies.entries()) {
+      if (overlapsRange(x0, x1, e.left, e.right + ENEMY_SIZE)) errors.push(`ヤシの木 ${i} がザコ敵 ${j} の範囲と重なる`);
+    }
+    for (const [j, pl] of stage.pillars.entries()) {
+      if (overlapsRange(x0, x1, pl.x, pl.x + pl.w)) errors.push(`ヤシの木 ${i} が柱 ${j} と重なる`);
+    }
+    if (overlapsRange(x0, x1, HIDDEN_HOLE_X, HIDDEN_HOLE_X + HIDDEN_HOLE_WIDTH)) errors.push(`ヤシの木 ${i} が隠し穴と重なる`);
+    if (x0 < 0 || x1 > SEA_X) errors.push(`ヤシの木 ${i} がステージの範囲外`);
+  }
+  const lastPalm = stage.palms[stage.palms.length - 1];
+  const westPillar = stage.pillars[0];
+  if (lastPalm !== undefined && westPillar && !(lastPalm < stage.target.x && stage.target.x + stage.target.w <= westPillar.x)) {
+    errors.push('練習用の的が、最後のヤシの木と西の柱の間にない');
   }
 
   // 隠し穴(ボーナスステージの入口): 平らな地面の上(穴・崖がない)で、ザコ敵とボスの往復範囲と重ならない

@@ -154,10 +154,10 @@ describe('空中の水平の動き(2.1)', () => {
 });
 
 describe('可変ジャンプ(2.2)', () => {
-  it('押し続けると、頂点の高さは約 140 px', () => {
+  it('押し続けると、頂点の高さは約 182 px(従来の 140 px の 1.3 倍)', () => {
     const h = apex(createPlayer(100), 60);
-    expect(h).toBeGreaterThan(128);
-    expect(h).toBeLessThan(145);
+    expect(h).toBeGreaterThan(170);
+    expect(h).toBeLessThan(188);
     expect(Math.abs(h - (JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY))).toBeLessThan(8); // 離散化で、少し低い
   });
 

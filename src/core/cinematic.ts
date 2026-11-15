@@ -168,7 +168,7 @@ export interface EndingScene {
   raftX: number;
   raftY: number;
   raftScale: number;
-  /** 遠ざかる島の中心の x・大きさの倍率・濃さ。 */
+  /** 水平線の上の島の中心の x・大きさの倍率・濃さ(島は沈まないので、時間によらず一定)。 */
   islandX: number;
   islandScale: number;
   islandAlpha: number;
@@ -185,6 +185,10 @@ export const ENDING_MESSAGES: ReadonlyArray<{ text: string; start: number; end: 
   { text: 'さあ、帰ろう。', start: 6, end: 9 },
   { text: 'これからは、おだやかな毎日が待っている。', start: 9.5, end: 12 },
 ];
+
+/** エンディングの島の中心の x(画面の幅に対する割合)。島の幅は 170 px。 */
+export const ENDING_ISLAND_X = 0.2;
+export const ENDING_ISLAND_WIDTH = 170;
 
 export function endingScene(t: number): EndingScene {
   const tt = Math.min(Math.max(t, 0), ENDING_DURATION);
@@ -207,12 +211,13 @@ export function endingScene(t: number): EndingScene {
     sunX: 0.68 * W,
     sunY: lerp(0.46 * H, horizonY, u),
     sunR: 46,
-    raftX: lerp(0.38 * W, 0.55 * W, e),
+    // イカダは、島の方角(左)へ進む。島の右端(0.2W + 85)を通り越さない
+    raftX: lerp(0.62 * W, 0.32 * W, e),
     raftY: lerp(0.84 * H, horizonY + 14, e),
     raftScale: lerp(1, 0.25, e),
-    islandX: lerp(0.2 * W, 0.08 * W, e),
-    islandScale: lerp(1, 0.2, e),
-    islandAlpha: lerp(1, 0.4, e),
+    islandX: ENDING_ISLAND_X * W,
+    islandScale: 1,
+    islandAlpha: 1,
     birds,
     messages,
     wave: tt,

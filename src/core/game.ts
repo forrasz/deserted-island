@@ -19,6 +19,8 @@ import {
   NUSHI_HIT_INVULN,
   NUSHI_MOUTH_DAMAGE,
   NUSHI_STAGGER_DAMAGE,
+  PALM_CANOPY_LOW,
+  PALM_DROP_OFFSETS,
   PILLAR_REGROW_TIME,
   PILLAR_REGROW_TIME_2,
   TARGET_FLASH_TIME,
@@ -49,7 +51,7 @@ import {
   type Pillar,
 } from './pillar';
 import {
-  createCoconut,
+  dropCoconut,
   stepCoconuts,
   stepThrown,
   throwCoconut,
@@ -57,6 +59,7 @@ import {
   type Coconut,
   type Thrown,
 } from './coconut';
+import { createPalm, stepPalms, type PalmTree } from './palm';
 import { createPart, partRect, stepPart, type RaftPart } from './raft-part';
 import { STAGE, type Stage } from './stage';
 import { fallYOf, isFullySupported, platformsOf, solidsOf } from './terrain';
@@ -96,7 +99,9 @@ export interface GameState {
   pillars: Pillar[];
   /** 無敵モード(隠しコマンド)。オンの間は、敵・弾・石のダメージを受けず、穴に落ちてもHPが減らない。 */
   invincible: boolean;
-  /** 地面のヤシの実(拾われると、しばらくして同じ位置に再び出現する)。 */
+  /** ステージのヤシの木(頭突きで実が落ちる)。 */
+  palms: PalmTree[];
+  /** 落ちている・落ちてくるヤシの実(30 秒で消える)。 */
   coconuts: Coconut[];
   /** 手持ちのヤシの実の数。 */
   held: number;
@@ -127,7 +132,7 @@ function pillarCenter(placements: Pick<Stage, 'bosses'>): number {
 
 export function createGame(
   world: WorldBounds = DEFAULT_WORLD,
-  placements: Pick<Stage, 'bosses' | 'enemies'> & Partial<Pick<Stage, 'pillars' | 'coconuts' | 'target'>> = STAGE,
+  placements: Pick<Stage, 'bosses' | 'enemies'> & Partial<Pick<Stage, 'pillars' | 'palms' | 'target'>> = STAGE,
 ): GameState {
   const player = createPlayer(100, world);
   return {
@@ -153,7 +158,8 @@ export function createGame(
     pillars: (placements.pillars ?? []).map((r) => createPillar(r, pillarCenter(placements))),
     intro: { state: 'sleeping', t: 0 },
     invincible: false,
-    coconuts: (placements.coconuts ?? []).map((x) => createCoconut(x, world.groundY)),
+    palms: (placements.palms ?? []).map((x) => createPalm(x)),
+    coconuts: [],
     held: 0,
     thrown: [],
     throwHeld: false,
@@ -446,9 +452,21 @@ export function stepGame(
     finalPlayer = { ...player, x: SEA_X - PLAYER_WIDTH };
   }
 
-  // ヤシの実を拾う・補充する(ヌシが倒されたあとは補充しない)
-  const nushiAlive = bosses.some((b) => b.kind === 'nushi' && b.alive);
-  const pick = stepCoconuts(state.coconuts, playerRect(finalPlayer), held, dt, nushiAlive);
+  // ヤシの木の頭突き(上昇しながら梢に重なる)で、実が落ちる
+  const palmResult = stepPalms(state.palms, playerRect(finalPlayer), finalPlayer.vy, world.groundY, dt);
+  // ヌシの突進が柱(ヤシの木)に当たった更新で、両方の木の外側に、実が 2 個ずつ落ちる(落ち始めるのは、ヒットストップのあと)
+  const treeDrops: Coconut[] = [];
+  if (staggerIdx >= 0) {
+    for (const pl of state.pillars) {
+      for (const off of PALM_DROP_OFFSETS) {
+        const cx = pl.side === 'west' ? pl.x - off : pl.x + pl.w + off;
+        treeDrops.push(dropCoconut(cx, world.groundY - PALM_CANOPY_LOW));
+      }
+    }
+  }
+  const fresh = [...palmResult.drops.map((d) => dropCoconut(d.x, d.y)), ...treeDrops];
+  // ヤシの実を拾う(落ちている途中でも拾える)。落ちる・消える時間も進める
+  const pick = stepCoconuts([...state.coconuts, ...fresh], playerRect(finalPlayer), held, world.groundY, dt);
   held = pick.held;
 
   const nushiForm2 = bosses.some((b) => b.kind === 'nushi' && b.alive && b.form === 2);
@@ -497,6 +515,7 @@ export function stepGame(
     pillars,
     intro,
     invincible: state.invincible,
+    palms: palmResult.palms,
     coconuts: pick.coconuts,
     held,
     thrown,

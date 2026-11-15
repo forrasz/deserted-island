@@ -7,7 +7,9 @@ import {
   FIXED_DT,
   FINAL_PILLAR_HEIGHT,
   FINAL_PILLAR_WIDTH,
+  GRAVITY,
   GROUND_Y,
+  JUMP_SPEED,
   NUSHI_STAGGER_TIME,
   PILLAR_REGROW_TIME,
   PLAYER_HEIGHT,
@@ -49,7 +51,7 @@ function dashing(b: Boss, playerX: number, pillars: BossCtx['pillars'] = EDGES):
 }
 
 describe('ステージの柱の配置', () => {
-  it('柱は 2 本(西の入口・東の出口)で、大きさは幅 60・高さ 180、地面の上に立つ', () => {
+  it('柱は 2 本(西の入口・東の出口)で、大きさは幅 60・高さ 260、地面の上に立つ', () => {
     expect(STAGE.pillars).toHaveLength(2);
     for (const p of STAGE.pillars) {
       expect([p.w, p.h]).toEqual([FINAL_PILLAR_WIDTH, FINAL_PILLAR_HEIGHT]);
@@ -63,8 +65,8 @@ describe('ステージの柱の配置', () => {
     expect(PLACE.right - PLACE.left).toBe(300);
   });
 
-  it('柱の高さ(180)は、ジャンプの最高点(約 140)より高い', () => {
-    expect(FINAL_PILLAR_HEIGHT).toBeGreaterThan((750 * 750) / (2 * 2000));
+  it('柱の高さ(260)は、ジャンプの最高点(約 182)より高く、ヌシ(250)の高さの付近である', () => {
+    expect(FINAL_PILLAR_HEIGHT).toBeGreaterThan(JUMP_SPEED ** 2 / (2 * GRAVITY) + 50);
   });
 });
 

@@ -4,6 +4,7 @@ import {
   dyingFlash,
   dyingProgress,
   dyingShake,
+  ENDING_ISLAND_WIDTH,
   ENDING_MESSAGES,
   endingScene,
   explosions,
@@ -163,11 +164,32 @@ describe('エンディングの時間割(ending-sequence)', () => {
     expect(Math.abs(b.raftY - b.horizonY)).toBeLessThan(Math.abs(a.raftY - a.horizonY));
   });
 
-  it('島は、遠ざかって小さく、薄くなる', () => {
+  it('島は沈まない: 位置・大きさ・濃さは、始まりから終わりまで変わらない', () => {
     const a = endingScene(0);
-    const b = endingScene(ENDING_DURATION);
-    expect(b.islandScale).toBeLessThan(a.islandScale);
-    expect(b.islandAlpha).toBeLessThan(a.islandAlpha);
+    for (let t = 0; t <= ENDING_DURATION; t += 0.5) {
+      const b = endingScene(t);
+      expect(b.islandX).toBe(a.islandX);
+      expect(b.islandScale).toBe(1);
+      expect(b.islandAlpha).toBe(1);
+    }
+  });
+
+  it('イカダは島の方角へ進む(島に近づき、島を通り越さない)', () => {
+    const a = endingScene(0);
+    const b = endingScene(ENDING_DURATION - 0.6);
+    const dist = (s: ReturnType<typeof endingScene>) => Math.abs(s.raftX - s.islandX);
+    expect(dist(b)).toBeLessThan(dist(a));
+    expect(a.raftX).toBeGreaterThan(a.islandX); // 島より右から始まる
+    // 終わりでも、イカダの左端は、島の右端より右(通り越さない)
+    const end = endingScene(ENDING_DURATION);
+    expect(end.raftX - 70 * end.raftScale).toBeGreaterThan(end.islandX + ENDING_ISLAND_WIDTH / 2);
+    // 一方向へ進む(戻らない)
+    let prev = endingScene(0).raftX;
+    for (let t = 0.1; t <= ENDING_DURATION; t += 0.1) {
+      const x = endingScene(t).raftX;
+      expect(x).toBeLessThanOrEqual(prev + 1e-9);
+      prev = x;
+    }
   });
 
   it('メッセージは 3 つあり、順に現れて消える(同時には出ない)', () => {

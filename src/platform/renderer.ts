@@ -6,6 +6,7 @@ import {
   dyingFlash,
   dyingProgress,
   dyingShake,
+  ENDING_ISLAND_WIDTH,
   endingScene,
   explosions,
   IMPACT_TEXT,
@@ -25,6 +26,7 @@ import {
   BONUS_ITEM_SIZE,
   BONUS_WIDTH as BONUS_WORLD_WIDTH,
   COCONUT_MAX_HELD,
+  PALM_CANOPY_LOW,
   BONUS_VENTS,
   ENEMY_SIZE,
   PARALLAX_FACTOR,
@@ -62,6 +64,9 @@ import { STAGE } from '../core/stage';
 import type { AssetStore } from './assets';
 
 const MARKER_INTERVAL = 160;
+/** エンディングのプレイヤーの表示の高さ(px。イカダの倍率 1 のとき)と、待機の動きの 1 コマの時間(秒)。 */
+const ENDING_PLAYER_HEIGHT = 90;
+const ENDING_IDLE_PERIOD = 0.15;
 
 export class Renderer {
   private readonly ctx: CanvasRenderingContext2D;
@@ -606,8 +611,12 @@ export class Renderer {
   private drawNushiBattle(flow: Flow, cameraX: number): void {
     const { ctx } = this;
     const g = flow.game;
+    for (const palm of g.palms) {
+      const px = worldToScreen(palm.x, cameraX);
+      if (px + 120 < 0 || px - 120 > VIEW_WIDTH) continue;
+      this.drawPalmTree(px, this.sy(GROUND_Y), PALM_CANOPY_LOW, palm.ready, palm.ready);
+    }
     for (const c of g.coconuts) {
-      if (!c.alive) continue;
       const r = coconutRect(c);
       const x = worldToScreen(r.x, cameraX);
       if (x + r.w < 0 || x > VIEW_WIDTH) continue;
@@ -722,26 +731,63 @@ export class Renderer {
     }
   }
 
-  /** 壊せる石の柱。灰色の柱に、ひびの線を入れる。 */
+  /**
+   * ヤシの木: 少し曲がった幹と、広がる葉、梢の実。height は幹の高さ(地面から梢まで)。
+   * fruit が true なら梢に実を描き、hint が true なら、頭突きできる高さを示す上向きの印(点滅しない)を出す。
+   */
+  private drawPalmTree(cx: number, groundScreenY: number, height: number, fruit: boolean, hint: boolean): void {
+    const { ctx } = this;
+    const topY = groundScreenY - height;
+    const lean = 16;
+    // 幹(少し曲がる)
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = 20;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, groundScreenY);
+    ctx.quadraticCurveTo(cx - lean, groundScreenY - height * 0.5, cx + 4, topY);
+    ctx.stroke();
+    ctx.strokeStyle = '#5a3a1e';
+    ctx.lineWidth = 3;
+    for (let i = 1; i < 8; i++) {
+      const y = groundScreenY - (height * i) / 8;
+      ctx.beginPath();
+      ctx.moveTo(cx - 10 - lean * Math.sin((i / 8) * Math.PI) * 0.6, y);
+      ctx.lineTo(cx + 10 - lean * Math.sin((i / 8) * Math.PI) * 0.6, y);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    // 葉(梢から広がる)
+    ctx.fillStyle = '#2e8b3d';
+    for (const ang of [-2.7, -2.1, -1.57, -1.0, -0.45]) {
+      ctx.save();
+      ctx.translate(cx + 4, topY);
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.ellipse(34, 0, 38, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // 実
+    if (fruit) {
+      for (const [dx, dy] of [[-8, 12], [8, 14], [0, 22]] as const) this.drawCoconut(cx + 4 + dx, topY + dy, 8);
+    }
+    // 頭突きの印(梢の少し下の、幹のわき)
+    if (hint) {
+      ctx.fillStyle = '#ffeb3b';
+      ctx.beginPath();
+      ctx.moveTo(cx + 30, topY + 50);
+      ctx.lineTo(cx + 20, topY + 68);
+      ctx.lineTo(cx + 40, topY + 68);
+      ctx.fill();
+    }
+  }
+
+  /** 闘技場の柱。ヤシの木の幹として、大きなヤシの木で描く(実は、衝突のときに落ちるので、梢にいくつか描く)。 */
   private drawPillar(p: Pillar, cameraX: number): void {
     const x = worldToScreen(p.x, cameraX);
-    if (x + p.w < 0 || x > VIEW_WIDTH) return;
-    const { ctx } = this;
-    const y = this.sy(p.y);
-    ctx.fillStyle = '#8d8d94';
-    ctx.fillRect(x, y, p.w, p.h);
-    ctx.fillStyle = '#a9a9b1';
-    ctx.fillRect(x, y, 8, p.h);
-    ctx.fillStyle = '#6a6a72';
-    ctx.fillRect(x - 6, y - 8, p.w + 12, 12); // 柱頭
-    ctx.strokeStyle = '#4a4a52';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(x + p.w * 0.6, y + 20);
-    ctx.lineTo(x + p.w * 0.35, y + 60);
-    ctx.lineTo(x + p.w * 0.65, y + 95);
-    ctx.lineTo(x + p.w * 0.4, y + 140);
-    ctx.stroke();
+    if (x + p.w < -80 || x > VIEW_WIDTH + 80) return;
+    this.drawPalmTree(x + p.w / 2, this.sy(p.y + p.h), p.h, true, false);
   }
 
   /** 弾(黄色の円)・放物線の弾(オレンジの円)・衝撃波(赤い帯)を描く。画面外は描かない。 */
@@ -935,11 +981,11 @@ export class Renderer {
     ctx.arc(s.sunX, s.sunY, s.sunR, 0, Math.PI * 2);
     ctx.fill();
 
-    // 遠ざかる島(水平線の上のシルエット)
+    // 島(水平線の上のシルエット。沈まず、同じ大きさ・同じ濃さで残る)
     ctx.save();
     ctx.globalAlpha = s.islandAlpha;
     ctx.fillStyle = '#25193a';
-    const iw = 170 * s.islandScale;
+    const iw = ENDING_ISLAND_WIDTH * s.islandScale;
     const ih = 62 * s.islandScale;
     ctx.beginPath();
     ctx.moveTo(s.islandX - iw / 2, s.horizonY);
@@ -992,11 +1038,27 @@ export class Renderer {
     ctx.fillRect(rx - 70 * k, ry - 4 * k, 140 * k, 16 * k);
     ctx.fillStyle = '#6b431e';
     for (let i = 1; i < 5; i++) ctx.fillRect(rx - 70 * k + i * 28 * k, ry - 4 * k, 2 * k + 0.5, 16 * k);
-    ctx.fillStyle = '#d2362b';
-    ctx.fillRect(rx - 10 * k, ry - 4 * k - 34 * k, 20 * k, 34 * k); // 立っているプレイヤー
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(rx - 5 * k, ry - 4 * k - 26 * k, 4 * k + 0.5, 5 * k + 0.5);
-    ctx.fillRect(rx + 2 * k, ry - 4 * k - 26 * k, 4 * k + 0.5, 5 * k + 0.5);
+    const sheet = this.assets.playerSheet;
+    if (sheet) {
+      // 新しいイメージ: 待機の動きのコマで、島の方(左)を向いて、イカダの倍率で小さくなる。足元はイカダの上面
+      const frames = sheet.atlas.clips.idle;
+      const frame = frames[Math.floor(Math.max(t, 0) / ENDING_IDLE_PERIOD) % frames.length]!;
+      const kk = (ENDING_PLAYER_HEIGHT * k) / sheet.atlas.referenceHeight;
+      const footX = rx;
+      const footY = ry - 4 * k;
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.translate(footX, 0);
+      ctx.scale(-1, 1); // 左向き(島の方向)
+      ctx.drawImage(sheet.image, frame.x, frame.y, frame.w, frame.h, -frame.fx * kk, footY - frame.fy * kk, frame.w * kk, frame.h * kk);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#d2362b';
+      ctx.fillRect(rx - 10 * k, ry - 4 * k - 34 * k, 20 * k, 34 * k); // 立っているプレイヤー(シートがないとき)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rx - 5 * k, ry - 4 * k - 26 * k, 4 * k + 0.5, 5 * k + 0.5);
+      ctx.fillRect(rx + 2 * k, ry - 4 * k - 26 * k, 4 * k + 0.5, 5 * k + 0.5);
+    }
 
     // 鳥(小さな V 字)
     ctx.strokeStyle = '#2a1a3a';

@@ -2,7 +2,7 @@ import { overlaps, type Rect } from './collision';
 import {
   COCONUT_GRAVITY,
   COCONUT_MAX_HELD,
-  COCONUT_RESPAWN_TIME,
+  COCONUT_LIFETIME,
   COCONUT_SIZE,
   COCONUT_THROW_VX,
   COCONUT_THROW_VY,
@@ -11,13 +11,16 @@ import {
   TARGET_SIZE,
 } from './config';
 
-/** 地面に置かれたヤシの実。拾われると alive が false になり、respawnT 秒後に同じ位置へ再び出現する。 */
+/**
+ * 落ちている(落ちてくる)ヤシの実。x, y は左上。ヤシの木の頭突きや、ヌシの突進の衝撃で落ち、
+ * 地面に着いたら止まり(landed)、30 秒で消える(age は着いてからの経過時間)。
+ */
 export interface Coconut {
   x: number;
   y: number;
-  alive: boolean;
-  /** 拾われてからの経過時間(秒)。 */
-  respawnT: number;
+  vy: number;
+  landed: boolean;
+  age: number;
 }
 
 /** 投げられて飛んでいるヤシの実。x, y は左上。 */
@@ -28,9 +31,9 @@ export interface Thrown {
   vy: number;
 }
 
-/** x(左辺)の位置の地面に置くヤシの実。 */
-export function createCoconut(x: number, groundY: number): Coconut {
-  return { x, y: groundY - COCONUT_SIZE, alive: true, respawnT: 0 };
+/** 中心の x・上端の y から落ち始めるヤシの実。 */
+export function dropCoconut(cx: number, y: number): Coconut {
+  return { x: cx - COCONUT_SIZE / 2, y, vy: 0, landed: false, age: 0 };
 }
 
 export function coconutRect(c: Coconut): Rect {
@@ -66,31 +69,33 @@ export function stepThrown(t: Thrown, dt: number): Thrown {
 }
 
 /**
- * 拾うと補充。プレイヤーが重なっていて、手持ちが上限未満なら拾う(alive → false)。
- * 拾われた実は respawnT を進め、COCONUT_RESPAWN_TIME 秒たち、プレイヤーが重なっていなければ再び出現する(canRespawn が true のとき)。
+ * 落ちているヤシの実を進める。落下中は重力で落ち、地面(groundY)で止まる。着いてから COCONUT_LIFETIME 秒で消える。
+ * プレイヤーが重なっていて、手持ちが上限未満なら拾う(落ちている途中でも拾える)。
  */
 export function stepCoconuts(
   coconuts: readonly Coconut[],
   player: Rect,
   held: number,
+  groundY: number,
   dt: number,
-  canRespawn: boolean,
 ): { coconuts: Coconut[]; held: number } {
   let h = held;
-  const next = coconuts.map((c) => {
-    const r = coconutRect(c);
-    if (c.alive) {
-      if (h < COCONUT_MAX_HELD && overlaps(player, r)) {
-        h += 1;
-        return { ...c, alive: false, respawnT: 0 };
-      }
-      return c;
+  const next: Coconut[] = [];
+  for (const c of coconuts) {
+    let n = c;
+    if (!n.landed) {
+      const vy = n.vy + COCONUT_GRAVITY * dt;
+      const y = n.y + vy * dt;
+      n = y + COCONUT_SIZE >= groundY ? { ...n, y: groundY - COCONUT_SIZE, vy: 0, landed: true, age: 0 } : { ...n, y, vy };
+    } else {
+      n = { ...n, age: n.age + dt };
     }
-    const respawnT = c.respawnT + dt;
-    if (canRespawn && respawnT >= COCONUT_RESPAWN_TIME - 1e-9 && !overlaps(player, r)) {
-      return { ...c, alive: true, respawnT: 0 };
+    if (h < COCONUT_MAX_HELD && overlaps(player, coconutRect(n))) {
+      h += 1;
+      continue;
     }
-    return { ...c, respawnT };
-  });
+    if (n.landed && n.age >= COCONUT_LIFETIME - 1e-9) continue;
+    next.push(n);
+  }
   return { coconuts: next, held: h };
 }

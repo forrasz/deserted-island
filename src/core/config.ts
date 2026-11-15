@@ -14,7 +14,7 @@ export const FIXED_DT = 1 / 60;
 export const MAX_FRAME_MS = 250;
 
 export const GRAVITY = 2000;
-export const JUMP_SPEED = 750;
+export const JUMP_SPEED = 855; // 最高点 約 182 px(従来の 750 → 約 140 px の 1.3 倍の高さ)
 export const MOVE_SPEED = 280;
 /** 地上の加速(停止から最高速まで約 0.16 秒)・減速(キーを離してから止まるまで約 0.12 秒)・ブレーキ(進む向きと反対のキー)の強さ(px/s²)。 */
 export const GROUND_ACCEL = 1800;
@@ -212,9 +212,9 @@ export const HIDDEN_HOLE_WIDTH = 120;
 export const HIDDEN_HOLE_X = WORLD_WIDTH / 2 - HIDDEN_HOLE_WIDTH / 2;
 
 // --- 最終ボス「ヌシ」の柱と気絶 ---
-/** 闘技場の入口に立つ、壊せる石の柱の大きさ(px)。高さはジャンプの最高点(約 140)より高い。 */
+/** 闘技場の入口に立つ、壊せる柱(ヤシの木の幹)の大きさ(px)。高さはジャンプの最高点(約 182)より高い。 */
 export const FINAL_PILLAR_WIDTH = 60;
-export const FINAL_PILLAR_HEIGHT = 180;
+export const FINAL_PILLAR_HEIGHT = 260;
 /** ヌシが柱にぶつかったあとの気絶の時間(秒)。通常形態と、強化形態。 */
 export const NUSHI_STAGGER_TIME = 6;
 export const NUSHI_STAGGER_TIME_2 = 4.5;
@@ -233,6 +233,15 @@ export const COCONUT_SIZE = 20;
 export const COCONUT_THROW_VX = 420;
 export const COCONUT_THROW_VY = 350;
 export const COCONUT_GRAVITY = 1200;
+/** ヤシの木: 幹の太さ・高さ(px)、梢の範囲(幹の中心から左右 PALM_CANOPY_HALF、地面から PALM_CANOPY_LOW〜PALM_CANOPY_HIGH の高さ)。 */
+export const PALM_TRUNK_WIDTH = 24;
+export const PALM_CANOPY_HALF = 50;
+export const PALM_CANOPY_LOW = 200;
+export const PALM_CANOPY_HIGH = 260;
+/** 地面に置かれたヤシの実が、拾われずに消えるまでの時間(秒)。 */
+export const COCONUT_LIFETIME = 30;
+/** ヌシの突進で、柱(ヤシの木)の外側に落ちる実の、幹の縁からの距離(px)。 */
+export const PALM_DROP_OFFSETS: readonly number[] = [30, 70];
 /** 練習用の的の大きさ(px)と、当たったあとに光る時間(秒)。 */
 export const TARGET_SIZE = 40;
 export const TARGET_FLASH_TIME = 0.4;
