@@ -58,7 +58,7 @@ function approach(v: number, target: number, delta: number): number {
  * - 地上: 加速(GROUND_ACCEL)・減速(GROUND_DECEL)・進む向きと反対のキーでブレーキ(TURN_ACCEL)
  * - 空中: キーで加速できる(地上の 6 割)が、キーを離しても減速しない(慣性)
  * ジャンプ: 押している間は高く、離すと上向きの速さが JUMP_CUT_SPEED に打ち切られる(可変ジャンプ)。
- * 足場を離れて COYOTE_TIME 以内はジャンプでき(コヨーテタイム)、着地の JUMP_BUFFER 前までの押下は着地でジャンプする(先行入力)。
+ * 足場を離れて COYOTE_TIME 以内はジャンプでき(コヨーテタイム)、着地の JUMP_BUFFER 前までに押して、着地の瞬間まで押し続けていれば、着地でジャンプする(先行入力。離したら捨てる)。
  * 地形を省略した世界は、従来と同じ平らな地面として動く。
  */
 export function stepPlayer(
@@ -88,6 +88,8 @@ export function stepPlayer(
   // ジャンプ: 足場の上、またはコヨーテタイムの間だけ。ジャンプできないときの押下は、先行入力として覚える
   let coyote = grounded ? COYOTE_TIME : Math.max(0, (player.coyote ?? 0) - dt);
   let jumpBuffer = Math.max(0, (player.jumpBuffer ?? 0) - dt);
+  // 先行入力は、着地の瞬間まで押し続けているときだけ使う(着地前に離したら捨てる。階段で小ジャンプにならないように)
+  if (!input.jump) jumpBuffer = 0;
   let vy = player.vy;
   if ((input.jump && (grounded || coyote > 0)) || (jumpBuffer > 0 && grounded)) {
     vy = -JUMP_SPEED;

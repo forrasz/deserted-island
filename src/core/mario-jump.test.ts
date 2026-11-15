@@ -264,27 +264,51 @@ describe('入力の猶予(2.3)', () => {
     return k;
   }
 
-  it('着地の 0.05 秒(3 更新)前にジャンプを押して、すぐ離すと、着地した更新で低いジャンプをする(先行入力)', () => {
+  it('着地の 0.05 秒(3 更新)前にジャンプを押して、着地の前に離すと、ジャンプしない(小ジャンプも起きない)', () => {
     const n = ticksToLand();
     let p: Player = { x: 100, y: FLOOR - 60, vx: 0, vy: 0, onGround: false };
     for (let k = 0; k < n - 1; k++) p = step(p, k === n - 4 ? JUMP : NO_INPUT); // 着地の 3 更新前に 1 更新だけ押す
     expect(p.onGround).toBe(false);
-    const landing = step(p, NO_INPUT);
-    // 着地の更新、または次の更新で、ジャンプする(上向きの速さ)
-    const next = landing.onGround ? step(landing, NO_INPUT) : landing;
-    expect(next.vy).toBeLessThan(0);
-    expect(next.onGround).toBe(false);
-    // 低いジャンプ(すぐ離した)
-    const h = (() => {
-      let q = next;
-      let min = q.y;
-      for (let k = 0; k < 100 && !q.onGround; k++) {
-        q = step(q, NO_INPUT);
-        min = Math.min(min, q.y);
-      }
-      return FLOOR - min;
-    })();
-    expect(h).toBeLessThan(70);
+    let q = step(p, NO_INPUT); // 着地の更新
+    expect(q.onGround).toBe(true);
+    for (let k = 0; k < 5; k++) {
+      q = step(q, NO_INPUT);
+      expect(q.onGround).toBe(true);
+      expect(q.y).toBe(FLOOR);
+    }
+  });
+
+  it('階段の 1 段へ跳び、着地の直前に押してすぐ離しても、着地でジャンプせず、段の上に立つ', () => {
+    const STEP_TOP = GROUND_Y - 60;
+    const w: WorldBounds = {
+      width: 5000,
+      groundY: GROUND_Y,
+      height: GROUND_Y + 800,
+      solids: [
+        { x: 0, y: GROUND_Y, w: 5000, h: 800 },
+        { x: 300, y: STEP_TOP, w: 200, h: 60 },
+      ],
+    };
+    // 段の真上、少し高い所から落ちる
+    let p: Player = { x: 350, y: STEP_TOP - PLAYER_HEIGHT - 40, vx: 0, vy: 0, onGround: false };
+    let landedAt = -1;
+    let pressedCount = 0;
+    for (let k = 0; k < 120 && landedAt < 0; k++) {
+      // 着地までの数更新のあいだに、1 更新だけ押す(すぐ離す)
+      const probe = step(p, NO_INPUT, w);
+      const pressing = !probe.onGround && probe.vy > 0 && STEP_TOP - PLAYER_HEIGHT - p.y < 30 && STEP_TOP - PLAYER_HEIGHT - p.y > 25;
+      if (pressing) pressedCount++;
+      p = step(p, pressing ? JUMP : NO_INPUT, w);
+      if (p.onGround) landedAt = k;
+    }
+    expect(landedAt).toBeGreaterThan(0);
+    expect(pressedCount).toBeGreaterThan(0);
+    for (let k = 0; k < 5; k++) {
+      p = step(p, NO_INPUT, w);
+      expect(p.onGround).toBe(true);
+      expect(p.vy).toBe(0);
+      expect(p.y).toBe(STEP_TOP - PLAYER_HEIGHT);
+    }
   });
 
   it('着地の瞬間まで押し続けていれば、高いジャンプをする', () => {

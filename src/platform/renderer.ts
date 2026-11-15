@@ -31,6 +31,7 @@ import {
   RAFT_SPRITE_WIDTH,
   SEA_X,
   PLAYER_DISPLAY_HEIGHT,
+  PLAYER_FOOT_SINK,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
   VIEW_HEIGHT,
@@ -230,7 +231,7 @@ export class Renderer {
         const frame = sheet.atlas.clips[this.anim.clip][this.anim.frame]!;
         const k = PLAYER_DISPLAY_HEIGHT / sheet.atlas.referenceHeight;
         const footX = playerBox.x + playerBox.w / 2;
-        const footY = playerBox.y + playerBox.h;
+        const footY = playerBox.y + playerBox.h + PLAYER_FOOT_SINK;
         const dw = frame.w * k;
         const dh = frame.h * k;
         ctx.save();

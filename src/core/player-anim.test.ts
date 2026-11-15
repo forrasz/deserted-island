@@ -13,6 +13,7 @@ import {
   type ClipName,
   type Frame,
 } from './player-anim';
+import { PLAYER_DISPLAY_HEIGHT, PLAYER_FOOT_SINK } from './config';
 
 // プロジェクトには Node の型定義を入れていない(テストの実行は Node なので、実行時には使える)
 // @ts-expect-error node:fs の型がない
@@ -82,6 +83,21 @@ describe('コマの一覧の検証(validateAtlas)', () => {
     expect(a!.referenceHeight).toBeGreaterThan(50);
     // 待機のコマは、基準の高さの近く
     for (const f of a!.clips.idle) expect(Math.abs(f.fy - a!.referenceHeight)).toBeLessThan(a!.referenceHeight * 0.1);
+  });
+
+  it('地上の動きの全コマで、足の下端(fy)は、コマの下端のすぐ上にある(靴の下に余白・影を含めない)', () => {
+    const json = JSON.parse(fs.readFileSync('public/assets/playersheet.json', 'utf8'));
+    const a = validateAtlas(json, 4096, 4096)!;
+    const k = PLAYER_DISPLAY_HEIGHT / a.referenceHeight;
+    for (const name of ['idle', 'walk', 'run', 'landStill', 'landRun'] as const) {
+      for (const f of a.clips[name]) {
+        // 足の下端より下の透明な余白は、表示で 2 px 以内(足元の描画のずれの、許容量)
+        expect((f.h - f.fy) * k).toBeLessThanOrEqual(2);
+      }
+    }
+    // 沈める量は 1 px 以内
+    expect(PLAYER_FOOT_SINK).toBeGreaterThanOrEqual(0);
+    expect(PLAYER_FOOT_SINK).toBeLessThanOrEqual(1);
   });
 });
 
